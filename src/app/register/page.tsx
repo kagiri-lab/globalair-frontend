@@ -25,10 +25,19 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <label className="label" style={{ textAlign: 'left', marginBottom: '0.4rem' }}>{label}</label>
+        {children}
+        {error && <p className="field-error" style={{ textAlign: 'left', marginTop: '0.25rem' }}>{error}</p>}
+    </div>
+);
+
 export default function RegisterPage() {
     const { register: authRegister } = useAuth();
     const router = useRouter();
     const [showPw, setShowPw] = useState(false);
+    const [showConfirmPw, setShowConfirmPw] = useState(false);
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
     const onSubmit = async (data: FormData) => {
@@ -40,14 +49,6 @@ export default function RegisterPage() {
             toast.error(err.response?.data?.message || 'Registration failed');
         }
     };
-
-    const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label className="label" style={{ textAlign: 'left', marginBottom: '0.4rem' }}>{label}</label>
-            {children}
-            {error && <p className="field-error" style={{ textAlign: 'left', marginTop: '0.25rem' }}>{error}</p>}
-        </div>
-    );
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', backgroundColor: '#ffffff', width: '100%' }}>
@@ -134,7 +135,10 @@ export default function RegisterPage() {
                         <Field label="Confirm Password" error={errors.confirmPassword?.message}>
                             <div style={{ position: 'relative' }}>
                                 <Lock size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                <input {...register('confirmPassword')} type="password" className={`input ${errors.confirmPassword ? 'error' : ''}`} style={{ paddingLeft: '2.5rem', paddingRight: '1rem', height: '44px' }} placeholder="Repeat your password" />
+                                <input {...register('confirmPassword')} type={showConfirmPw ? 'text' : 'password'} className={`input ${errors.confirmPassword ? 'error' : ''}`} style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', height: '44px' }} placeholder="Repeat your password" />
+                                <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                                    {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
                             </div>
                         </Field>
 

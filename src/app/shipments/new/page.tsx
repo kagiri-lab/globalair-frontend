@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { ArrowRight, Check, MapPin, Package, Plus, ChevronLeft, ChevronRight, ChevronDown, BookHeart, X, ArrowLeft, Trash2, AlertTriangle, Snowflake, Globe } from 'lucide-react';
 import api from '@/lib/api';
 import { ProductCategory, QuoteResult, ShipmentType } from '@/lib/types';
+import GoogleAddressPicker from '@/components/GoogleAddressPicker';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const itemSchema = z.object({
@@ -54,6 +55,11 @@ const schema = z.object({
     notes: z.string().optional(),
     save_pickup_address: z.boolean().default(false),
     save_destination_address: z.boolean().default(false),
+    
+    pickup_latitude: z.number().optional(),
+    pickup_longitude: z.number().optional(),
+    destination_latitude: z.number().optional(),
+    destination_longitude: z.number().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -158,6 +164,7 @@ function NewShipmentForm() {
     const [draftLoading, setDraftLoading] = useState(false);
     const [isDraftSuccess, setIsDraftSuccess] = useState(false);
     const [expandedItemIdx, setExpandedItemIdx] = useState(0);
+    const [googleMapsEnabled, setGoogleMapsEnabled] = useState(false);
 
     const { register, handleSubmit, control, watch, trigger, setValue, getValues, reset, formState: { errors, isSubmitting } } = useForm<any>({
         resolver: zodResolver(schema),
@@ -181,14 +188,16 @@ function NewShipmentForm() {
         // Load static data once
         const loadInitialData = async () => {
             try {
-                const [cats, locs, addrs] = await Promise.all([
+                const [cats, locs, addrs, settingsRes] = await Promise.all([
                     api.get('/categories'),
                     api.get('/locations/hierarchy'),
-                    api.get('/addresses')
+                    api.get('/addresses'),
+                    api.get('/public/settings')
                 ]);
                 setCategories(cats.data.data.categories);
                 setHierarchy(locs.data.data);
                 setSavedAddresses(addrs.data.data.addresses);
+                setGoogleMapsEnabled(settingsRes.data.data.settings.google_maps_enabled === 'true');
 
                 // Load draft if needed
                 if (draftId) {
@@ -248,6 +257,10 @@ function NewShipmentForm() {
                             destination_postal_code: s.destination_postal_code || '',
                             destination_contact_name: s.destination_contact_name || '',
                             destination_contact_phone: s.destination_contact_phone || '',
+                            pickup_latitude: s.pickup_latitude ? Number(s.pickup_latitude) : undefined,
+                            pickup_longitude: s.pickup_longitude ? Number(s.pickup_longitude) : undefined,
+                            destination_latitude: s.destination_latitude ? Number(s.destination_latitude) : undefined,
+                            destination_longitude: s.destination_longitude ? Number(s.destination_longitude) : undefined,
                             shipment_type: s.shipment_type || 'standard',
                             transport_mode: s.transport_mode || 'air',
                             notes: s.notes || '',
@@ -513,9 +526,19 @@ function NewShipmentForm() {
                                 </div>
 
                                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-                                    <label className="label">Street Address / Details *</label>
-                                    <input {...register('pickup_address')} className="input" placeholder="House/Apt, Street name..." />
-                                    {errors.pickup_address && <p className="field-error">{errors.pickup_address.message as string}</p>}
+                                    <GoogleAddressPicker 
+                                        label="Street Address / Details *"
+                                        placeholder="Enter pickup address..."
+                                        defaultValue={watchedValues.pickup_address}
+                                        countryCode={hierarchy?.origins.find((c: any) => c.id === watchedValues.origin_country_id)?.country_code}
+                                        onAddressSelect={(address, lat, lng) => {
+                                            setValue('pickup_address', address);
+                                            setValue('pickup_latitude', lat);
+                                            setValue('pickup_longitude', lng);
+                                        }}
+                                        error={errors.pickup_address?.message as string}
+                                        disabled={!googleMapsEnabled}
+                                    />
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
@@ -583,9 +606,19 @@ function NewShipmentForm() {
                                 </div>
 
                                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-                                    <label className="label">Delivery Street Address *</label>
-                                    <input {...register('destination_address')} className="input" placeholder="House/Apt, Street name..." />
-                                    {errors.destination_address && <p className="field-error">{errors.destination_address.message as string}</p>}
+                                    <GoogleAddressPicker 
+                                        label="Delivery Street Address *"
+                                        placeholder="Enter delivery address..."
+                                        defaultValue={watchedValues.destination_address}
+                                        countryCode={hierarchy?.destinations.find((c: any) => c.id === watchedValues.destination_country_id)?.country_code}
+                                        onAddressSelect={(address, lat, lng) => {
+                                            setValue('destination_address', address);
+                                            setValue('destination_latitude', lat);
+                                            setValue('destination_longitude', lng);
+                                        }}
+                                        error={errors.destination_address?.message as string}
+                                        disabled={!googleMapsEnabled}
+                                    />
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
