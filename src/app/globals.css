@@ -262,11 +262,19 @@ select.input {
 .spinner {
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: white;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;
+}
+
+/* White spinner inside solid buttons; the default above is for light page backgrounds */
+.btn-primary .spinner,
+.btn-danger .spinner,
+.btn-dark .spinner {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
 }
 
 /* ── Brand text ──────────────────────────────────────────────────────────── */
@@ -556,9 +564,12 @@ select.input {
   }
 }
 
-/* ── Auth Layout ────────────────────────────────────────────────────────────── */
-@media (max-width: 1024px) {
-  .auth-brand-side {
-    display: none !important;
+/* Phones: 16px text in fields so iPhones don't zoom the page in when one is tapped */
+@media (max-width: 860px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
+

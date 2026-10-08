@@ -3,34 +3,76 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useBrandSrc, useSiteContact } from '@/components/SiteInfoProvider';
 import { useAuth } from '@/lib/auth';
-import { Package, LayoutDashboard, Truck, LogOut, Plus, ChevronRight, MapPin, Menu, User, Bell, Info } from 'lucide-react';
+import { OPS_HOME, loginUrl } from '@/lib/roles';
+import {
+    LayoutDashboard, Package, LogOut, Plus, MapPin, Menu, LifeBuoy, Search, Globe, ChevronRight, Home, Receipt,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import NotificationBell from '@/components/NotificationBell';
+import '@/components/portal/portal.css';
+
+// Tracking lives in the top bar search (and the phone tab bar), so it isn't repeated here
+const NAV = [
+    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { href: '/shipments', icon: Package, label: 'My shipments' },
+    { href: '/dashboard/addresses', icon: MapPin, label: 'Address book' },
+    { href: '/dashboard/billing', icon: Receipt, label: 'Billing' },
+    { href: '/dashboard/support', icon: LifeBuoy, label: 'Support' },
+];
+
+// Breadcrumb title for the current page
+function pageTitle(pathname: string) {
+    if (pathname === '/dashboard') return 'Dashboard';
+    if (pathname === '/shipments') return 'My Shipments';
+    if (pathname === '/shipments/new') return 'New Shipment';
+    if (pathname.endsWith('/invoice')) return 'Invoice';
+    if (pathname.startsWith('/shipments/')) return 'Shipment Details';
+    if (pathname === '/dashboard/addresses') return 'Address Book';
+    if (pathname === '/dashboard/support') return 'Support';
+    if (pathname.startsWith('/dashboard/support/')) return 'Support Ticket';
+    if (pathname === '/dashboard/profile') return 'My Profile';
+    if (pathname === '/dashboard/billing') return 'Billing';
+    if (pathname === '/dashboard/track') return 'Track a Shipment';
+    return 'Dashboard';
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const { user, isLoading, logout } = useAuth();
+    const logoSrc = useBrandSrc('logo');
+    const { company } = useSiteContact();
+    const { user, isLoading, isStaff, logout } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [trackQuery, setTrackQuery] = useState('');
 
-    // Close menu on navigation
-    useEffect(() => {
+    // Close the drawer after navigating
+    const [lastPath, setLastPath] = useState(pathname);
+    if (pathname !== lastPath) {
+        setLastPath(pathname);
         setIsMobileMenuOpen(false);
-    }, [pathname]);
+    }
 
+    // Signed-out users sign in first; staff belong in the operations portal
     useEffect(() => {
-        if (!isLoading && !user) router.replace('/login');
-    }, [user, isLoading, router]);
+        if (isLoading) return;
+        if (!user) router.replace(loginUrl(pathname + window.location.search));
+        else if (isStaff) router.replace(OPS_HOME);
+    }, [user, isLoading, isStaff, pathname, router]);
 
     const handleLogout = () => {
-        logout();
-        document.cookie = 'token=; path=/; max-age=0';
         toast.success('Logged out successfully');
-        router.push('/login');
+        logout();
     };
 
-    if (isLoading || !user) {
+    const onTrack = (e: React.FormEvent) => {
+        e.preventDefault();
+        const q = trackQuery.trim().toUpperCase();
+        if (q) router.push(`/dashboard/track?q=${encodeURIComponent(q)}`);
+    };
+
+    if (isLoading || !user || isStaff) {
         return (
             <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="spinner" />
@@ -38,88 +80,101 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
     }
 
-    const navItems = [
-        { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { href: '/shipments', icon: Truck, label: 'My Shipments' },
-        { href: '/dashboard/addresses', icon: MapPin, label: 'Addresses' },
-        { href: '/dashboard/support', icon: Info, label: 'Support Hub' },
-    ];
+    const isActive = (href: string) =>
+        href === '/dashboard' ? pathname === '/dashboard' : pathname === href || pathname.startsWith(`${href}/`);
+    const title = pageTitle(pathname);
+    const initial = user.name.charAt(0).toUpperCase();
 
     return (
-        <div className="dashboard-layout">
-            {/* Mobile Overlay */}
-            <div
-                className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`}
-                onClick={() => setIsMobileMenuOpen(false)}
-            />
+        <div className="portal">
+            <div className={`portal-overlay${isMobileMenuOpen ? ' open' : ''}`} onClick={() => setIsMobileMenuOpen(false)} />
 
-            {/* Sidebar */}
-            <aside className={`dashboard-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-                {/* Logo */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '2rem', padding: '0 0.25rem' }}>
-                    <img src="/logo-transparent.png" alt="Logo" style={{ height: 36, objectFit: 'contain', mixBlendMode: 'multiply' }} />
-                </div>
-
-                {/* Quick Action */}
-                <Link href="/shipments/new" className="btn btn-primary btn-full" style={{ marginBottom: '1.5rem', justifyContent: 'center' }}>
-                    <Plus size={16} /> New Shipment
+            {/* Sidebar (drawer on phones) */}
+            <aside className={`portal-sidebar cp-side${isMobileMenuOpen ? ' open' : ''}`} aria-label="Portal navigation">
+                <Link href="/dashboard" className="cp-side-brand" aria-label={`${company} customer portal`}>
+                    <img src={logoSrc} alt={company} />
                 </Link>
 
-                {/* Nav */}
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
-                    {navItems.map(({ href, icon: Icon, label }) => (
-                        <Link
-                            key={href}
-                            href={href}
-                            className={`sidebar-link ${pathname === href || (href !== '/dashboard' && pathname.startsWith(href)) ? 'active' : ''}`}
-                        >
-                            <Icon size={18} />
-                            {label}
-                        </Link>
-                    ))}
+                <Link href="/shipments/new" className="cp-side-new">
+                    <Plus size={17} /> New shipment
+                </Link>
+
+                <nav className="cp-side-nav">
+                    {NAV.map(({ href, icon: Icon, label }) => {
+                        const active = isActive(href);
+                        return (
+                            <Link key={href} href={href} className={`cp-side-link${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined}>
+                                <Icon size={18} /> {label}
+                            </Link>
+                        );
+                    })}
+                    {/* Phones have no top bar, so the website link lives here */}
+                    <Link href="/" className="cp-side-link cp-side-phone"><Globe size={18} /> Website</Link>
                 </nav>
 
-                {/* User footer */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                    <Link href="/dashboard/profile" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: 8, marginBottom: '0.5rem', textDecoration: 'none', transition: 'background-color 0.2s ease', cursor: 'pointer' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', fontWeight: 700, color: 'white', flexShrink: 0 }}>
-                            {user.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ overflow: 'hidden' }}>
-                            <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</p>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</p>
-                        </div>
+                {/* Account: profile behind the name, sign out beside it */}
+                <div className="cp-side-foot">
+                    <Link href="/dashboard/profile" className={`cp-side-user${isActive('/dashboard/profile') ? ' active' : ''}`} title="Your profile and security">
+                        <span className="portal-avatar">{initial}</span>
+                        <span className="cp-side-user-text">
+                            <strong>{user.name}</strong>
+                            <span>{user.email}</span>
+                        </span>
                     </Link>
-                    <button onClick={handleLogout} className="sidebar-link btn-full" style={{ border: 'none', background: 'transparent', textAlign: 'left', width: '100%', color: 'var(--danger)', cursor: 'pointer' }}>
-                        <LogOut size={18} /> Sign Out
+                    <button type="button" onClick={handleLogout} className="cp-side-signout" aria-label="Sign out" title="Sign out">
+                        <LogOut size={17} />
                     </button>
                 </div>
             </aside>
 
-            {/* Main */}
-            <main className="dashboard-main">
-                {/* Desktop Top Bar */}
-                <header className="desktop-header" style={{ height: 72, padding: '0 2rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+            <main className="portal-main">
+                {/* Desktop top bar */}
+                <header className="portal-topbar">
+                    <nav className="portal-crumbs" aria-label="Breadcrumb">
+                        <Link href="/dashboard">Customer Portal</Link>
+                        <ChevronRight size={14} />
+                        <strong>{title}</strong>
+                    </nav>
+                    <form className="portal-track" onSubmit={onTrack} role="search">
+                        <Search size={16} />
+                        <input
+                            className="input"
+                            value={trackQuery}
+                            onChange={e => setTrackQuery(e.target.value)}
+                            placeholder="Track a shipment…"
+                            aria-label="Tracking number"
+                        />
+                    </form>
+                    <Link href="/" className="cp-topbar-icon" title="Go to the website" aria-label="Go to the website"><Globe size={18} /></Link>
                     <NotificationBell />
+                    <Link href="/dashboard/profile" className="portal-avatar" title={user.name} style={{ textDecoration: 'none' }}>{initial}</Link>
                 </header>
 
-                {/* Mobile Header */}
-                <header className="mobile-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <img src="/logo-transparent.png" alt="Logo" style={{ height: 28, objectFit: 'contain', mixBlendMode: 'multiply' }} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {/* Phone header */}
+                <header className="portal-mobile-header">
+                    <Link href="/dashboard" className="portal-brand">
+                        <img src={logoSrc} alt={company} />
+                    </Link>
+                    <span className="portal-mobile-title">{title}</span>
+                    <div className="portal-mobile-actions">
                         <NotificationBell />
-                        <button className="menu-toggle" onClick={() => setIsMobileMenuOpen(true)}>
-                            <Menu size={24} />
-                        </button>
+                        <Link href="/dashboard/profile" className="portal-avatar" style={{ width: 32, height: 32, fontSize: '0.85rem', textDecoration: 'none' }} aria-label="My profile">
+                            {initial}
+                        </Link>
                     </div>
                 </header>
 
-                <div style={{ flex: 1, padding: '0.5rem 0' }}>
-                    {children}
-                </div>
+                <div className="portal-content">{children}</div>
             </main>
+
+            {/* Phone bottom tab bar */}
+            <nav className="portal-tabbar" aria-label="Quick navigation">
+                <Link href="/dashboard" className={isActive('/dashboard') ? 'active' : ''}><Home size={20} /><span>Home</span></Link>
+                <Link href="/shipments" className={pathname === '/shipments' || (pathname.startsWith('/shipments/') && pathname !== '/shipments/new') ? 'active' : ''}><Package size={20} /><span>Shipments</span></Link>
+                <Link href="/shipments/new" className={`portal-tab-new${pathname === '/shipments/new' ? ' active' : ''}`}><span><Plus size={22} /></span><span>New</span></Link>
+                <Link href="/dashboard/track" className={pathname === '/dashboard/track' ? 'active' : ''}><Search size={20} /><span>Track</span></Link>
+                <button type="button" onClick={() => setIsMobileMenuOpen(true)} aria-label="Open menu"><Menu size={20} /><span>Menu</span></button>
+            </nav>
         </div>
     );
 }

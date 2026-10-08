@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MapPin, Plus, Trash2, Phone, User as UserIcon, X } from 'lucide-react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -26,6 +27,7 @@ export default function AddressBookPage() {
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [confirming, setConfirming] = useState<Address | null>(null);
 
     const load = () => {
         setLoading(true);
@@ -49,12 +51,12 @@ export default function AddressBookPage() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Remove this address?')) return;
         setDeletingId(id);
         try {
             await api.delete(`/shipments/addresses/${id}`);
             toast.success('Address removed');
             setAddresses(a => a.filter(x => x.id !== id));
+            setConfirming(null);
         } catch { toast.error('Failed to remove'); }
         finally { setDeletingId(null); }
     };
@@ -133,6 +135,17 @@ export default function AddressBookPage() {
                 </div>
             )}
 
+            <ConfirmDialog
+                open={!!confirming}
+                title="Remove this address?"
+                message={confirming && <><strong>{confirming.label}</strong><br />{confirming.address}, {confirming.city}, {confirming.country}<br /><br />It’s removed from your address book only. Shipments that used it aren’t affected.</>}
+                confirmLabel="Remove address"
+                danger
+                busy={!!confirming && deletingId === confirming.id}
+                onConfirm={() => confirming && handleDelete(confirming.id)}
+                onClose={() => setConfirming(null)}
+            />
+
             {/* List */}
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}><div className="spinner" /></div>
@@ -149,7 +162,7 @@ export default function AddressBookPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
                     {addresses.map(addr => (
                         <div key={addr.id} className="card" style={{ position: 'relative', padding: '1.25rem' }}>
-                            <button onClick={() => handleDelete(addr.id)} disabled={deletingId === addr.id} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6, display: 'flex' }}>
+                            <button onClick={() => setConfirming(addr)} disabled={deletingId === addr.id} aria-label={`Remove ${addr.label}`} title="Remove address" style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6, display: 'flex' }}>
                                 {deletingId === addr.id ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <Trash2 size={15} />}
                             </button>
 

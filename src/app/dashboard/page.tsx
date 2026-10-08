@@ -3,149 +3,257 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Package, Truck, CheckCircle, Clock, Plus, ArrowRight } from 'lucide-react';
+import {
+    Package, Truck, CheckCircle, Clock, Plus, ArrowRight, Search, MapPin, LifeBuoy, FileText, Phone, Mail, MessageCircle,
+    Plane, Ship, PencilLine, BadgeDollarSign, CalendarClock, Receipt,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
 import { Shipment } from '@/lib/types';
+import { useSiteContact } from '@/components/SiteInfoProvider';
+import { telHref } from '@/lib/siteInfo';
+import ShipmentRow, { ACTIVE_STATUSES, ListHead, statusLabel } from '@/components/portal/ShipmentRow';
+import QuoteRequestModal from '@/components/portal/QuoteRequestModal';
 
-function StatusBadge({ status }: { status: string }) {
-    return <span className={`badge badge-${status}`}>{status.replace('_', ' ')}</span>;
-}
+type Ticket = { id: string; subject: string; details?: string | { offer?: { status: string; amount: number; transport_mode: string; valid_until?: string } } | null };
 
-const TYPE_CONFIG: Record<string, { emoji: string }> = {
-    standard: { emoji: '📦' },
-    express: { emoji: '⚡' },
-    overnight: { emoji: '🚀' },
-};
-
-const MODE_CONFIG: Record<string, { emoji: string }> = {
-    air: { emoji: '✈️' },
-    sea: { emoji: '🚢' },
-    road: { emoji: '🚛' },
-};
+// The journey shown on "On the move" cards
+const STEPS = [
+    { key: 'confirmed', label: 'Booked' },
+    { key: 'picked_up', label: 'Picked up' },
+    { key: 'in_transit', label: 'In transit' },
+    { key: 'out_for_delivery', label: 'Out for delivery' },
+    { key: 'delivered', label: 'Delivered' },
+];
+const MODE_ICON = { air: Plane, sea: Ship, road: Truck };
+const usd = (n: number) => `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+const shortDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : '');
 
 export default function DashboardPage() {
-    const { user, isLoading: authLoading } = useAuth();
+    const { user } = useAuth();
+    const contact = useSiteContact();
     const router = useRouter();
-    const [shipments, setShipments] = useState<Shipment[]>([]);
+    const [recent, setRecent] = useState<Shipment[]>([]);
+    const [moving, setMoving] = useState<Shipment[]>([]);
+    const [drafts, setDrafts] = useState<Shipment[]>([]);
+    const [offers, setOffers] = useState<{ id: string; subject: string; amount: number; mode: string; until?: string }[]>([]);
+    const [counts, setCounts] = useState<Record<string, number>>({});
+    const [bills, setBills] = useState<{ key: string; title: string; detail: string; late?: boolean }[]>([]);
     const [loading, setLoading] = useState(true);
+    const [trackQuery, setTrackQuery] = useState('');
+    const [quoteOpen, setQuoteOpen] = useState(false);
 
     useEffect(() => {
-        if (!authLoading && !user) {
-            router.push('/login');
-            return;
-        }
-
-        if (user) {
-            api.get('/shipments?limit=10').then((res) => {
-                setShipments(res.data.data.shipments);
-            }).catch(() => { }).finally(() => setLoading(false));
-        }
-    }, [user, authLoading, router]);
-
-    if (authLoading || (loading && user)) {
-        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}><div className="spinner" /></div>;
-    }
+        if (!user) return; // the layout handles redirects
+        const list = (q: string) => api.get(`/shipments?${q}`).then(r => r.data.data).catch(() => null);
+        Promise.all([
+            list('limit=6'),
+            ...ACTIVE_STATUSES.map(s => list(`status=${s}&limit=4`)),
+            list('status=draft&limit=3'),
+            api.get('/support').then(r => r.data.data as Ticket[]).catch(() => [] as Ticket[]),
+            api.get('/billing').then(r => r.data.data).catch(() => null),
+        ]).then(results => {
+            // Invoices to pay before pickup, and open monthly statements
+            const billing = results.pop() as { unpaid: { id: string; invoice_number: string; total_price: string; pickup_city: string; destination_city: string }[]; statements: { id: string; number: string; period: string; total: string; due_date: string | null; status: string }[] } | null;
+            if (billing) {
+                const today = new Date(new Date().toDateString());
+                setBills([
+                    ...billing.unpaid.map(i => ({ key: i.id, title: `Pay invoice ${i.invoice_number}: ${usd(Number(i.total_price))}`, detail: `${i.pickup_city} → ${i.destination_city} · due before pickup` })),
+                    ...billing.statements.filter(st => st.status !== 'paid').map(st => {
+                        const late = !!st.due_date && new Date(st.due_date) < today;
+                        return { key: st.id, late, title: `Statement for ${new Date(`${st.period}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}: ${usd(Number(st.total))}`, detail: late ? `Overdue since ${shortDate(st.due_date || '')}` : `Due ${shortDate(st.due_date || '')}` };
+                    }),
+                ]);
+            }
+            const [all, ...rest] = results;
+            const tickets = rest.pop() as Ticket[];
+            const draftData = rest.pop();
+            setRecent(all?.shipments || []);
+            setCounts(all?.status_counts || {});
+            setMoving(rest.flatMap(r => r?.shipments || [])
+                .sort((a: Shipment, b: Shipment) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 4));
+            setDrafts(draftData?.shipments || []);
+            // Quotes where the team has sent a price that's waiting for an answer
+            setOffers(tickets.flatMap(t => {
+                const d = typeof t.details === 'string' ? JSON.parse(t.details || '{}') : t.details || {};
+                const o = d?.offer;
+                return o?.status === 'sent' ? [{ id: t.id, subject: t.subject, amount: o.amount, mode: o.transport_mode, until: o.valid_until }] : [];
+            }));
+        }).finally(() => setLoading(false));
+    }, [user]);
 
     if (!user) return null;
 
-    const stats = {
-        total: shipments.length,
-        inTransit: shipments.filter((s) => ['in_transit', 'picked_up', 'out_for_delivery'].includes(s.status)).length,
-        delivered: shipments.filter((s) => s.status === 'delivered').length,
-        pending: shipments.filter((s) => s.status === 'pending').length,
-    };
+    const sum = (statuses: string[]) => statuses.reduce((n, s) => n + (counts[s] || 0), 0);
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    type StatItem = { label: string; value: number; icon: React.ComponentType<{ size?: number; color?: string }>; color: string; bg: string };
-
-    const statItems: StatItem[] = [
-        { label: 'Total Shipments', value: stats.total, icon: Package, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-        { label: 'In Transit', value: stats.inTransit, icon: Truck, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
-        { label: 'Delivered', value: stats.delivered, icon: CheckCircle, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-        { label: 'Pending', value: stats.pending, icon: Clock, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+    const stats = [
+        { label: 'All shipments', value: total, icon: Package, tone: 'dark', href: '/shipments' },
+        { label: 'On the move', value: sum(ACTIVE_STATUSES), icon: Truck, tone: 'red', href: '/shipments?status=in_transit' },
+        { label: 'Awaiting confirmation', value: counts.pending || 0, icon: Clock, tone: 'amber', href: '/shipments?status=pending' },
+        { label: 'Delivered', value: counts.delivered || 0, icon: CheckCircle, tone: 'green', href: '/shipments?status=delivered' },
     ];
 
-    return (
-        <div style={{ padding: '2rem', maxWidth: 900, margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                <div>
-                    <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.25rem' }}>
-                        Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name.split(' ')[0]} 👋
-                    </h1>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Here&apos;s an overview of your shipments</p>
-                </div>
-                <Link href="/shipments/new" className="btn btn-primary">
-                    <Plus size={16} /> New Shipment
-                </Link>
-            </div>
+    const onTrack = (e: React.FormEvent) => {
+        e.preventDefault();
+        const q = trackQuery.trim().toUpperCase();
+        if (q) router.push(`/dashboard/track?q=${encodeURIComponent(q)}`);
+    };
 
-            {/* Stats grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-                {statItems.map(({ label, value, icon: Icon, color, bg }) => (
-                    <div key={label} className="stat-card">
-                        <div style={{ width: 44, height: 44, borderRadius: 12, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Icon size={20} color={color} />
-                        </div>
-                        <div>
-                            <p style={{ fontSize: '1.75rem', fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)' }}>{value}</p>
-                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{label}</p>
-                        </div>
-                    </div>
+    const attention = offers.length + drafts.length + bills.length;
+
+    return (
+        <div className="portal-page cpd">
+            {/* Numbers at a glance */}
+            <div className="cpd-stats">
+                {stats.map(({ label, value, icon: Icon, tone, href }) => (
+                    <Link key={label} href={href} className={`cpd-stat tone-${tone}`}>
+                        <span className="cpd-stat-icon"><Icon size={19} /></span>
+                        <strong>{loading ? '–' : value}</strong>
+                        <span>{label}</span>
+                    </Link>
                 ))}
             </div>
 
-            {/* Recent Shipments */}
-            <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>Recent Shipments</h2>
-                    <Link href="/shipments" style={{ fontSize: '0.8125rem', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        View all <ArrowRight size={14} />
-                    </Link>
+            {/* Things waiting on the customer */}
+            {attention > 0 && (
+                <section className="cpd-attention" aria-label="Needs your attention">
+                    {bills.map(b => (
+                        <Link key={b.key} href="/dashboard/billing" className={`cpd-todo${b.late ? ' offer' : ''}`}>
+                            <span className="cpd-todo-icon"><Receipt size={18} /></span>
+                            <span className="cpd-todo-text">
+                                <strong>{b.title}</strong>
+                                <small>{b.detail}</small>
+                            </span>
+                            <span className="cpd-todo-cta">How to pay <ArrowRight size={14} /></span>
+                        </Link>
+                    ))}
+                    {offers.map(o => (
+                        <Link key={o.id} href={`/dashboard/support/${o.id}`} className="cpd-todo offer">
+                            <span className="cpd-todo-icon"><BadgeDollarSign size={18} /></span>
+                            <span className="cpd-todo-text">
+                                <strong>Your price is ready: {usd(o.amount)} by {o.mode}</strong>
+                                <small>{o.subject}{o.until ? ` · valid until ${shortDate(o.until)}` : ''}</small>
+                            </span>
+                            <span className="cpd-todo-cta">Review <ArrowRight size={14} /></span>
+                        </Link>
+                    ))}
+                    {drafts.map(d => (
+                        <Link key={d.id} href={`/shipments/new?draftId=${d.id}`} className="cpd-todo">
+                            <span className="cpd-todo-icon"><PencilLine size={18} /></span>
+                            <span className="cpd-todo-text">
+                                <strong>Finish booking {d.pickup_city && d.destination_city ? `${d.pickup_city} → ${d.destination_city}` : d.tracking_number}</strong>
+                                <small>Draft saved {shortDate(d.updated_at)}</small>
+                            </span>
+                            <span className="cpd-todo-cta">Continue <ArrowRight size={14} /></span>
+                        </Link>
+                    ))}
+                </section>
+            )}
+
+            <div className="cpd-grid">
+                <div className="cpd-main">
+                    {/* Live shipments with where they are on the journey */}
+                    {moving.length > 0 && (
+                        <section>
+                            <div className="portal-section-title">
+                                <h2>On the move</h2>
+                                <Link href="/shipments?status=in_transit">See all <ArrowRight size={14} /></Link>
+                            </div>
+                            <div className="cpd-moving">
+                                {moving.map(s => {
+                                    const Mode = MODE_ICON[s.transport_mode as keyof typeof MODE_ICON] || Truck;
+                                    const at = STEPS.findIndex(x => x.key === s.status);
+                                    return (
+                                        <Link key={s.id} href={`/shipments/${s.id}`} className="cpd-move">
+                                            <div className="cpd-move-head">
+                                                <span className="cpd-move-mode"><Mode size={17} /></span>
+                                                <span className="cpd-move-tn">{s.tracking_number}</span>
+                                                <span className={`badge badge-${s.status}`}>{statusLabel(s.status)}</span>
+                                            </div>
+                                            <div className="cpd-move-route">
+                                                <span><small>From</small>{s.pickup_city}</span>
+                                                <ArrowRight size={16} />
+                                                <span><small>To</small>{s.destination_city}</span>
+                                                {s.estimated_delivery && (
+                                                    <span className="cpd-move-eta"><CalendarClock size={14} /> Due {shortDate(s.estimated_delivery)}</span>
+                                                )}
+                                            </div>
+                                            <ol className="cpd-steps" aria-label={`Progress: ${statusLabel(s.status)}`}>
+                                                {STEPS.map((step, i) => (
+                                                    <li key={step.key} className={i < at ? 'done' : i === at ? 'now' : ''}>
+                                                        <i />
+                                                        <span>{step.label}</span>
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Recent shipments */}
+                    <section>
+                        <div className="portal-section-title">
+                            <h2>Recent shipments</h2>
+                            {recent.length > 0 && <Link href="/shipments">View all <ArrowRight size={14} /></Link>}
+                        </div>
+
+                        {loading ? (
+                            <div className="portal-list" style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}><div className="spinner" /></div>
+                        ) : recent.length === 0 ? (
+                            <div className="portal-list portal-empty">
+                                <Package size={40} style={{ opacity: 0.35 }} />
+                                <h3>No shipments yet</h3>
+                                <p>Here’s how to send your first package with {contact.company}:</p>
+                                <div className="portal-steps">
+                                    <div><em>Step 1</em><b>Add pickup &amp; drop-off</b>Choose where we collect and deliver.</div>
+                                    <div><em>Step 2</em><b>Describe your items</b>Add weights and categories for an instant quote.</div>
+                                    <div><em>Step 3</em><b>Confirm &amp; track</b>Book it and follow every step live.</div>
+                                </div>
+                                <Link href="/shipments/new" className="btn btn-primary"><Plus size={16} /> Create your first shipment</Link>
+                            </div>
+                        ) : (
+                            <div className="portal-list">
+                                <ListHead />
+                                {recent.map(s => <ShipmentRow key={s.id} shipment={s} />)}
+                            </div>
+                        )}
+                    </section>
                 </div>
 
-                {loading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
-                ) : shipments.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-                        <Package size={40} style={{ margin: '0 auto 1rem', opacity: 0.4 }} />
-                        <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>No shipments yet</p>
-                        <p style={{ fontSize: '0.875rem' }}>Create your first shipment to get started</p>
-                        <Link href="/shipments/new" className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }}>
-                            <Plus size={14} /> Create Shipment
-                        </Link>
+                {/* Side column */}
+                <aside className="cpd-side">
+                    <form className="cpd-track" onSubmit={onTrack}>
+                        <label htmlFor="dash-track"><Search size={15} /> Track a shipment</label>
+                        <div>
+                            <input id="dash-track" className="input" value={trackQuery} onChange={e => setTrackQuery(e.target.value)} placeholder="Tracking number" />
+                            <button type="submit" className="btn btn-primary">Track</button>
+                        </div>
+                    </form>
+
+                    <div className="cpd-quick">
+                        <Link href="/shipments/new"><span><Plus size={18} /></span> New shipment</Link>
+                        <button type="button" onClick={() => setQuoteOpen(true)}><span><FileText size={18} /></span> Request a quote</button>
+                        <Link href="/dashboard/addresses"><span><MapPin size={18} /></span> Address book</Link>
+                        <Link href="/dashboard/support"><span><LifeBuoy size={18} /></span> Get help</Link>
                     </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {shipments.map((s) => (
-                            <Link key={s.id} href={`/shipments/${s.id}`} style={{ textDecoration: 'none' }}>
-                                <div className="card card-hover" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--accent)', fontFamily: 'monospace' }}>{s.tracking_number}</span>
-                                            <StatusBadge status={s.status} />
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                                            <span style={{ fontSize: '0.85rem' }}>{MODE_CONFIG[s.transport_mode || 'air']?.emoji}</span>
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                {s.shipment_type}
-                                            </span>
-                                        </div>
-                                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {s.pickup_city}, {s.pickup_country} → {s.destination_city}, {s.destination_country}
-                                        </p>
-                                    </div>
-                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>$ {Number(s.total_price || 0).toLocaleString()}</p>
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(s.created_at).toLocaleDateString()}</p>
-                                    </div>
-                                    <ArrowRight size={16} color="var(--text-muted)" />
-                                </div>
-                            </Link>
-                        ))}
+
+                    <div className="cpd-help">
+                        <h3>Talk to us</h3>
+                        {contact.opening_hours.length > 0 && (
+                            <p>{contact.opening_hours.map(h => `${h.day}, ${h.hours}`).join(' · ')}</p>
+                        )}
+                        {contact.phones[0] && <a href={telHref(contact.phones[0])}><Phone size={15} /> {contact.phones[0]}</a>}
+                        {contact.whatsapp && <a href={`https://wa.me/${contact.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={15} /> WhatsApp</a>}
+                        <a href={`mailto:${contact.support_email}`}><Mail size={15} /> {contact.support_email}</a>
                     </div>
-                )}
+                </aside>
             </div>
+
+            <QuoteRequestModal open={quoteOpen} onClose={() => setQuoteOpen(false)} />
         </div>
     );
 }

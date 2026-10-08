@@ -1,0 +1,151 @@
+/* ── Customer Support Hub: the price sent for a quote ── */
+.qof {
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: 14px;
+  border: 1px solid rgba(229, 58, 64, 0.3);
+  background: #fff;
+}
+
+.qof-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.qof-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.qof-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.qof-title small {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.qof-title strong {
+  font-size: 1.7rem;
+  line-height: 1.15;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.qof-title span {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.qof-note {
+  margin: 0.8rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.qof-route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  margin: 0.8rem 0 0;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.qof-route span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.qof-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.qof-ask {
+  margin-left: auto;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.qof-form {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.qof-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.qof-form em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.qof-form .qof-actions {
+  margin-top: 0.2rem;
+}
+
+.qof-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.qof-small {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.qof-done {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.qof-done p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.qof-done.accepted { border-color: #bbf7d0; background: #f0fdf4; color: #047857; }
+.qof-done.declined { border-color: var(--border); background: var(--bg-secondary); color: var(--text-muted); }
+.qof-done.expired { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+
+@media (max-width: 560px) {
+  .qof-two {
+    grid-template-columns: 1fr;
+  }
+
+  .qof-ask {
+    margin-left: 0;
+  }
+}

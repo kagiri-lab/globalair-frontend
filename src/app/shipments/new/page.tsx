@@ -1,15 +1,21 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
+import { useEffect, useState, useRef, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm, useFieldArray, UseFormRegister, FieldErrors } from 'react-hook-form';
+import Link from 'next/link';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { ArrowRight, Check, MapPin, Package, Plus, ChevronLeft, ChevronRight, ChevronDown, BookHeart, X, ArrowLeft, Trash2, AlertTriangle, Snowflake, Globe } from 'lucide-react';
+import {
+    ArrowRight, Check, MapPin, Package, Plus, ChevronDown, BookHeart, ArrowLeft, Trash2,
+    AlertTriangle, Snowflake, Plane, Ship, Truck, Search, Pencil, Calendar, Weight, Info, Navigation, Flag,
+} from 'lucide-react';
 import api from '@/lib/api';
-import { ProductCategory, QuoteResult, ShipmentType } from '@/lib/types';
+import { ProductCategory, QuoteResult, QuoteProblem, TransportMode } from '@/lib/types';
 import GoogleAddressPicker from '@/components/GoogleAddressPicker';
+import QuoteRequestModal, { QuotePrefill } from '@/components/portal/QuoteRequestModal';
+import '@/components/portal/new-shipment.css';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const itemSchema = z.object({
@@ -33,7 +39,7 @@ const schema = z.object({
     origin_id: z.string().min(1, 'Please select origin city'),
     destination_country_id: z.string().min(1, 'Please select destination country'),
     destination_id: z.string().min(1, 'Please select destination city'),
-    
+
     pickup_address: z.string().min(5, 'Address is required'),
     pickup_city: z.string().optional(),
     pickup_state: z.string().optional(),
@@ -41,7 +47,7 @@ const schema = z.object({
     pickup_postal_code: z.string().optional(),
     pickup_contact_name: z.string().optional(),
     pickup_contact_phone: z.string().optional(),
-    
+
     destination_address: z.string().min(5, 'Address is required'),
     destination_city: z.string().optional(),
     destination_state: z.string().optional(),
@@ -49,13 +55,13 @@ const schema = z.object({
     destination_postal_code: z.string().optional(),
     destination_contact_name: z.string().optional(),
     destination_contact_phone: z.string().optional(),
-    
+
     shipment_type: z.enum(['standard', 'express', 'overnight']).default('standard'),
     transport_mode: z.enum(['air', 'sea', 'road']).default('air'),
     notes: z.string().optional(),
     save_pickup_address: z.boolean().default(false),
     save_destination_address: z.boolean().default(false),
-    
+
     pickup_latitude: z.number().optional(),
     pickup_longitude: z.number().optional(),
     destination_latitude: z.number().optional(),
@@ -63,67 +69,68 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+const EMPTY_ITEM = { category_id: '', description: '', weight_kg: 1, quantity: 1, is_fragile: false, is_hazardous: false, requires_refrigeration: false };
 
-// ── Searchable Select Component ──────────────────────────────────────────────
-function SearchableSelect({ label, options, value, onChange, placeholder, disabled, error }: any) {
+const MODE_META: Record<string, { label: string; icon: typeof Plane; blurb: string }> = {
+    air: { label: 'Air freight', icon: Plane, blurb: 'Fastest — ideal for urgent and high-value cargo' },
+    sea: { label: 'Sea freight', icon: Ship, blurb: 'Most economical for heavy or bulky loads' },
+    road: { label: 'Road freight', icon: Truck, blurb: 'Door-to-door overland across the region' },
+};
+
+const money = (n: number | string) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// ── Searchable select ────────────────────────────────────────────────────────
+interface Option { id: string; name: string }
+
+function SearchableSelect({ id, label, options, value, onChange, placeholder, disabled, error }: {
+    id: string; label: string; options: Option[]; value: string; onChange: (v: string) => void;
+    placeholder: string; disabled?: boolean; error?: string;
+}) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) setIsOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const selectedOption = options.find((o: any) => o.id === value);
-    const filtered = options.filter((o: any) => o.name.toLowerCase().includes(search.toLowerCase()));
+    const selected = options.find(o => o.id === value);
+    const filtered = options.filter(o => o.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', width: '100%', zIndex: isOpen ? 1000 : 1 }}>
-            <label className="label">{label}</label>
-            <div 
-                onClick={() => !disabled && setIsOpen(!isOpen)}
-                style={{
-                    padding: '0.75rem 1rem', background: 'var(--bg-card)', border: `1px solid ${error ? '#ef4444' : 'var(--border)'}`,
-                    borderRadius: 12, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s'
-                }}
+        <div ref={containerRef} className={`ns-select${isOpen ? ' open' : ''}`}>
+            <label className="label" htmlFor={id}>{label}</label>
+            <button
+                id={id}
+                type="button"
+                className={`ns-select-trigger${error ? ' error' : ''}`}
+                onClick={() => !disabled && setIsOpen(o => !o)}
+                disabled={disabled}
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
             >
-                <span style={{ fontSize: '0.9rem', color: selectedOption ? 'var(--text)' : 'var(--text-muted)' }}>
-                    {selectedOption ? selectedOption.name : placeholder}
-                </span>
-                <ChevronRight size={16} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-            </div>
-
+                <span className={selected ? '' : 'placeholder'}>{selected ? selected.name : placeholder}</span>
+                <ChevronDown size={16} />
+            </button>
             {isOpen && (
-                <div style={{ 
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 99999, 
-                    marginTop: '0.5rem', background: '#ffffff', border: '1px solid var(--border)', 
-                    borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.15)', overflow: 'hidden' 
-                }}>
-                    <div style={{ padding: '0.5rem', borderBottom: '1px solid var(--border)', background: '#ffffff' }}>
-                        <input 
-                            autoFocus className="input" placeholder="Type to search..." value={search} 
-                            onChange={(e) => setSearch(e.target.value)} onClick={(e) => e.stopPropagation()}
-                            style={{ height: '36px', fontSize: '0.85rem', background: 'var(--bg-secondary)' }}
-                        />
+                <div className="ns-select-menu">
+                    <div className="ns-select-search">
+                        <Search size={14} />
+                        <input autoFocus className="input" placeholder="Type to search…" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <div style={{ maxHeight: '250px', overflowY: 'auto', background: '#ffffff' }}>
-                        {filtered.length > 0 ? filtered.map((o: any) => (
-                            <div 
-                                key={o.id} onClick={(e) => { e.stopPropagation(); onChange(o.id); setIsOpen(false); setSearch(''); }}
-                                style={{ padding: '0.75rem 1rem', cursor: 'pointer', fontSize: '0.9rem', transition: 'background 0.2s', color: 'var(--text-primary)' }}
-                                className="table-row-hover"
-                            >
-                                {o.name}
-                            </div>
-                        )) : <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No results found</div>}
-                    </div>
+                    <ul role="listbox">
+                        {filtered.length > 0 ? filtered.map(o => (
+                            <li key={o.id} role="option" aria-selected={o.id === value}>
+                                <button type="button" className={o.id === value ? 'active' : ''} onClick={() => { onChange(o.id); setIsOpen(false); setSearch(''); }}>
+                                    {o.name} {o.id === value && <Check size={14} />}
+                                </button>
+                            </li>
+                        )) : <li className="ns-select-empty">No results found</li>}
+                    </ul>
                 </div>
             )}
             {error && <p className="field-error">{error}</p>}
@@ -132,13 +139,17 @@ function SearchableSelect({ label, options, value, onChange, placeholder, disabl
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-const STEPS = ['Origin', 'Destination', 'Details', 'Review', 'Done'];
+const STEPS = [
+    { label: 'Pickup', hint: 'Where we collect' },
+    { label: 'Delivery', hint: 'Where it goes' },
+    { label: 'Package', hint: 'What you’re sending' },
+    { label: 'Review', hint: 'Confirm & book' },
+];
 
 const STEP_FIELDS: (keyof FormData)[][] = [
     ['origin_country_id', 'origin_id', 'pickup_address'],
     ['destination_country_id', 'destination_id', 'destination_address'],
     ['items'],
-    [],
     [],
 ];
 
@@ -155,9 +166,11 @@ function NewShipmentForm() {
     const searchParams = useSearchParams();
     const draftId = searchParams.get('draftId');
     const [step, setStep] = useState(0);
+    const [furthestStep, setFurthestStep] = useState(0);
     const [categories, setCategories] = useState<ProductCategory[]>([]);
     const [hierarchy, setHierarchy] = useState<any>(null);
     const [quote, setQuote] = useState<QuoteResult | null>(null);
+    const [quoteProblem, setQuoteProblem] = useState<QuoteProblem | null>(null);
     const [quoteLoading, setQuoteLoading] = useState(false);
     const [trackingNumber, setTrackingNumber] = useState('');
     const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
@@ -165,6 +178,9 @@ function NewShipmentForm() {
     const [isDraftSuccess, setIsDraftSuccess] = useState(false);
     const [expandedItemIdx, setExpandedItemIdx] = useState(0);
     const [googleMapsEnabled, setGoogleMapsEnabled] = useState(false);
+    const [pickedAddress, setPickedAddress] = useState<{ pickup?: string; destination?: string }>({});
+    const [quoteRequest, setQuoteRequest] = useState<QuotePrefill | null>(null);
+    const topRef = useRef<HTMLDivElement>(null);
 
     const { register, handleSubmit, control, watch, trigger, setValue, getValues, reset, formState: { errors, isSubmitting } } = useForm<any>({
         resolver: zodResolver(schema),
@@ -177,7 +193,7 @@ function NewShipmentForm() {
             destination_address: '',
             shipment_type: 'standard',
             transport_mode: 'air',
-            items: [{ category_id: '', description: '', weight_kg: 0.5, quantity: 1, is_fragile: false, is_hazardous: false, requires_refrigeration: false }],
+            items: [{ ...EMPTY_ITEM, weight_kg: 0.5 }],
         },
     });
 
@@ -185,52 +201,46 @@ function NewShipmentForm() {
     const watchedValues = watch();
 
     useEffect(() => {
-        // Load static data once
+        // Load static data once (and the draft, when resuming one)
         const loadInitialData = async () => {
             try {
                 const [cats, locs, addrs, settingsRes] = await Promise.all([
                     api.get('/categories'),
                     api.get('/locations/hierarchy'),
                     api.get('/addresses'),
-                    api.get('/public/settings')
+                    api.get('/public/settings'),
                 ]);
                 setCategories(cats.data.data.categories);
                 setHierarchy(locs.data.data);
                 setSavedAddresses(addrs.data.data.addresses);
                 setGoogleMapsEnabled(settingsRes.data.data.settings.google_maps_enabled === 'true');
 
-                // Load draft if needed
                 if (draftId) {
                     const res = await api.get(`/shipments/${draftId}`);
                     const s = res.data.data.shipment;
                     if (s.status === 'draft') {
-                        // Find country IDs from town IDs in hierarchy
+                        // Find country IDs from town IDs in the hierarchy
                         let origin_country_id = '';
                         let destination_country_id = '';
-                        
                         const h = locs.data.data;
                         if (h) {
-                            // Find Origin
                             for (const country of h.origins) {
                                 if (s.origin_id && country.cities.some((c: any) => c.id === s.origin_id)) {
                                     origin_country_id = country.id;
                                     break;
                                 } else if (!s.origin_id && country.name === s.pickup_country) {
                                     origin_country_id = country.id;
-                                    // Try to find city ID by name as well
                                     const city = country.cities.find((c: any) => c.name === s.pickup_city);
                                     if (city) s.origin_id = city.id;
                                     break;
                                 }
                             }
-                            // Find Destination
                             for (const country of h.destinations) {
                                 if (s.destination_id && country.cities.some((c: any) => c.id === s.destination_id)) {
                                     destination_country_id = country.id;
                                     break;
                                 } else if (!s.destination_id && country.name === s.destination_country) {
                                     destination_country_id = country.id;
-                                    // Try to find city ID by name as well
                                     const city = country.cities.find((c: any) => c.name === s.destination_city);
                                     if (city) s.destination_id = city.id;
                                     break;
@@ -277,87 +287,168 @@ function NewShipmentForm() {
                                 is_hazardous: !!i.is_hazardous,
                                 requires_refrigeration: !!i.requires_refrigeration,
                                 special_instructions: i.special_instructions || '',
-                            }))
+                            })),
                         });
                     }
                 }
             } catch (err) {
-                console.error("Failed to load initial data", err);
+                console.error('Failed to load initial data', err);
             }
         };
 
         loadInitialData();
-    }, [draftId, reset]); // Removed hierarchy to prevent loop
+    }, [draftId, reset]);
 
-    // Helper to find name by ID
+    // Helper to find a location name by ID
     const findLocName = (id: string) => {
-        if (!hierarchy) return id;
-        
-        // Search in Origins
-        for (const country of hierarchy.origins) {
-            if (country.id === id) return country.name;
-            const city = country.cities.find((c: any) => c.id === id);
-            if (city) return city.name;
+        if (!hierarchy || !id) return '';
+        for (const list of [hierarchy.origins, hierarchy.destinations]) {
+            for (const country of list) {
+                if (country.id === id) return country.name;
+                const city = country.cities.find((c: any) => c.id === id);
+                if (city) return city.name;
+            }
         }
-        
-        // Search in Destinations
-        for (const country of hierarchy.destinations) {
-            if (country.id === id) return country.name;
-            const city = country.cities.find((c: any) => c.id === id);
-            if (city) return city.name;
-        }
-        return id;
+        return '';
     };
 
+    // Modes with a price from the chosen origin to the chosen destination, that every chosen category allows
+    const itemCategoryIds = (watchedValues.items || []).map((i: any) => i.category_id).filter(Boolean).join(',');
     const transportModes = useMemo(() => {
         const destCountry = hierarchy?.destinations.find((d: any) => d.id === watchedValues.destination_country_id);
         const destCity = destCountry?.cities.find((c: any) => c.id === watchedValues.destination_id);
-        
-        const modes = [];
-        // Use the new aggregated 'modes' property from the backend
-        if (!destCity || destCity.modes?.air > 0) modes.push({ value: 'air', label: 'Air', badge: '✈️' });
-        if (destCity && destCity.modes?.sea > 0) modes.push({ value: 'sea', label: 'Sea', badge: '🚢' });
-        if (destCity && destCity.modes?.road > 0) modes.push({ value: 'road', label: 'Road', badge: '🚛' });
-        return modes;
-    }, [hierarchy, watchedValues.destination_country_id, watchedValues.destination_id]);
+        let modes: string[] = ['air', 'sea', 'road'];
+        if (destCity && watchedValues.origin_id) modes = destCity.routes?.[watchedValues.origin_id] || [];
+        else if (!destCity) modes = ['air'];
+        for (const id of itemCategoryIds.split(',').filter(Boolean)) {
+            const allowed = categories.find(c => c.id === id)?.allowed_modes;
+            if (allowed?.length) modes = modes.filter(m => allowed.includes(m as TransportMode));
+        }
+        return ['air', 'sea', 'road'].filter(m => modes.includes(m));
+    }, [hierarchy, watchedValues.destination_country_id, watchedValues.destination_id, watchedValues.origin_id, itemCategoryIds, categories]);
+    const routeUnpriced = !!(watchedValues.destination_id && watchedValues.origin_id && transportModes.length === 0);
 
     useEffect(() => {
-        if (transportModes.length > 0 && !transportModes.some(m => m.value === watchedValues.transport_mode)) {
-            setValue('transport_mode', transportModes[0].value as any);
+        if (transportModes.length > 0 && !transportModes.includes(watchedValues.transport_mode)) {
+            setValue('transport_mode', transportModes[0] as any);
         }
     }, [transportModes, watchedValues.transport_mode, setValue]);
 
-    const fetchQuote = useCallback(async () => {
-        const { origin_id, destination_id, transport_mode, items } = watchedValues;
-        if (!origin_id || !destination_id || !items?.length) return;
-        setQuoteLoading(true);
-        try {
-            const res = await api.post('/shipments/quote', {
-                origin_id,
-                destination_id,
-                transport_mode,
-                items: items.filter((i: any) => i.category_id && i.weight_kg).map((i: any) => ({
-                    category_id: i.category_id,
-                    weight_kg: i.weight_kg,
-                    quantity: i.quantity || 1,
-                })),
-            });
-            setQuote(res.data.data);
-        } catch { /* quote failure is non-fatal */ }
-        finally { setQuoteLoading(false); }
-    }, [watchedValues.origin_id, watchedValues.destination_id, watchedValues.transport_mode, JSON.stringify(watchedValues.items)]);
+    // ── Live price estimate: re-quote (debounced) whenever route, mode or items change ──
+    // Send everything the backend prices on — dimensions (volumetric weight) and handling flags (15% surcharge) —
+    // so the estimate matches the price the shipment is booked at
+    const quotableItems = (watchedValues.items || [])
+        .filter((i: any) => i.category_id && Number(i.weight_kg) > 0)
+        .map((i: any) => ({
+            category_id: i.category_id,
+            weight_kg: Number(i.weight_kg),
+            quantity: Number(i.quantity) || 1,
+            length_cm: Number(i.length_cm) || undefined,
+            width_cm: Number(i.width_cm) || undefined,
+            height_cm: Number(i.height_cm) || undefined,
+            declared_value: Number(i.declared_value) || undefined,
+            description: i.description || undefined,
+            is_fragile: !!i.is_fragile,
+            is_hazardous: !!i.is_hazardous,
+            requires_refrigeration: !!i.requires_refrigeration,
+        }));
+    const quoteKey = watchedValues.origin_id && watchedValues.destination_id && quotableItems.length
+        ? JSON.stringify([watchedValues.origin_id, watchedValues.destination_id, watchedValues.transport_mode, quotableItems])
+        : '';
+
+    useEffect(() => {
+        if (!quoteKey) return;
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            const [origin_id, destination_id, transport_mode, items] = JSON.parse(quoteKey);
+            setQuoteLoading(true);
+            try {
+                const res = await api.post('/shipments/quote', { origin_id, destination_id, transport_mode, items });
+                if (!cancelled) { setQuote(res.data.data); setQuoteProblem(null); }
+            } catch (err: any) {
+                // No price for the route, or an item breaks its category's rules
+                if (!cancelled) {
+                    setQuote(null);
+                    const d = err.response?.data;
+                    setQuoteProblem(d?.message ? { code: d.code, message: d.message, contact: d.contact } : { message: 'We couldn’t price this shipment right now.', contact: true });
+                }
+            } finally {
+                if (!cancelled) setQuoteLoading(false);
+            }
+        }, 450);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [quoteKey]);
+
+    const shownQuote = quoteKey ? quote : null;
+    const shownProblem = routeUnpriced
+        ? { code: 'NO_RATE', message: `We don’t have a set price for this route yet. Contact us and we’ll send you a quote.`, contact: true }
+        : quoteKey ? quoteProblem : null;
+
+    // Picking a category pre-ticks the handling it always needs (e.g. cold chain for perishables)
+    const applyCategoryDefaults = (idx: number, categoryId: string) => {
+        const cat = categories.find(c => c.id === categoryId);
+        if (!cat) return;
+        if (cat.default_fragile) setValue(`items.${idx}.is_fragile`, true);
+        if (cat.default_hazardous) setValue(`items.${idx}.is_hazardous`, true);
+        if (cat.default_refrigeration) setValue(`items.${idx}.requires_refrigeration`, true);
+    };
+
+    // No set price: open the in-portal quote request, filled with what's been entered so far
+    const openQuoteRequest = () => {
+        const v = getValues();
+        const its: any[] = (v.items || []).filter((i: any) => i.category_id || i.description);
+        const catName = (id: string) => categories.find(c => c.id === id)?.name;
+        const flags = (i: any) => [i.is_fragile && 'fragile', i.is_hazardous && 'hazardous', i.requires_refrigeration && 'refrigerated'].filter(Boolean);
+        const weight = its.reduce((n, i) => n + (Number(i.weight_kg) || 0) * (Number(i.quantity) || 1), 0);
+        const dims = (i: any) => i.length_cm && i.width_cm && i.height_cm ? `${i.length_cm} × ${i.width_cm} × ${i.height_cm} cm` : '';
+        setQuoteRequest({
+            pickup_city: findLocName(v.origin_id),
+            pickup_region: findLocName(v.origin_country_id),
+            pickup_address: v.pickup_address || '',
+            dropoff_city: findLocName(v.destination_id),
+            dropoff_region: findLocName(v.destination_country_id),
+            dropoff_address: v.destination_address || '',
+            transport_mode: routeUnpriced ? '' : MODE_META[v.transport_mode]?.label || '',
+            commodity: [...new Set(its.map(i => i.description || catName(i.category_id)).filter(Boolean))].join(', '),
+            weight: weight > 0 ? `${weight.toFixed(1)} kg` : '',
+            dimensions: its.length === 1 ? dims(its[0]) : '',
+            booking: {
+                origin_country_id: v.origin_country_id, origin_id: v.origin_id,
+                destination_country_id: v.destination_country_id, destination_id: v.destination_id,
+                transport_mode: routeUnpriced ? undefined : v.transport_mode, shipment_type: v.shipment_type,
+                items: its,
+            },
+            items: its.map(i => {
+                const extra = [dims(i), ...flags(i)].filter(Boolean).join(', ');
+                return `${Number(i.quantity) || 1} × ${i.description || 'Item'}${catName(i.category_id) ? ` (${catName(i.category_id)})` : ''}, ${Number(i.weight_kg) || 0} kg each${extra ? `, ${extra}` : ''}`;
+            }).join('; '),
+        });
+    };
+
+    const goToStep = (n: number) => {
+        setStep(n);
+        topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     const goNext = async () => {
         const valid = await trigger(STEP_FIELDS[step] as any);
-        if (!valid) return;
-        if (step === 2) fetchQuote(); // Now fetch after Details (Step 2)
-        setStep(s => s + 1);
+        if (!valid) {
+            // Open the first item with a problem so the user can see it
+            if (step === 2 && Array.isArray(errors.items)) {
+                const firstBad = (errors.items as any[]).findIndex(Boolean);
+                if (firstBad >= 0) setExpandedItemIdx(firstBad);
+            }
+            toast.error('Please complete the highlighted fields');
+            return;
+        }
+        const next = step + 1;
+        setFurthestStep(f => Math.max(f, next));
+        goToStep(next);
     };
 
     const onSubmit = async (data: FormData, status = 'pending') => {
         if (status === 'draft') setDraftLoading(true);
         try {
-            // Find Names for storage/display
             let originCountryName = '';
             let originCityName = '';
             if (hierarchy) {
@@ -369,7 +460,6 @@ function NewShipmentForm() {
                     }
                 }
             }
-
             const destCountry = hierarchy?.destinations.find((d: any) => d.id === data.destination_country_id);
             const destCity = destCountry?.cities.find((c: any) => c.id === data.destination_id);
 
@@ -382,19 +472,18 @@ function NewShipmentForm() {
                 destination_country: destCountry?.name,
             };
 
-            const res = draftId 
+            const res = draftId
                 ? await api.put(`/shipments/${draftId}`, payload)
                 : await api.post('/shipments', payload);
 
             if (status === 'draft') {
                 setIsDraftSuccess(true);
-                setStep(4); // Use Step 5 (Done) logic
-                toast.success('Saved as draft! 📥');
+                toast.success('Saved as draft');
             } else {
                 setTrackingNumber(res.data.data.shipment.tracking_number);
-                setStep(4);
-                toast.success(draftId ? 'Shipment finalized! 🎉' : 'Shipment created! 🎉');
+                toast.success(draftId ? 'Shipment finalized!' : 'Shipment booked!');
             }
+            goToStep(4);
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to process shipment');
         } finally {
@@ -402,477 +491,520 @@ function NewShipmentForm() {
         }
     };
 
-    const StepIndicator = () => (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem' }}>
-            {STEPS.map((label: string, i: number) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'unset' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            width: 34, height: 34, borderRadius: '50%', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.78rem', fontWeight: 800, flexShrink: 0,
-                            background: i < step ? '#10b981' : i === step ? 'var(--accent)' : 'var(--bg-card)',
-                            border: i < step || i === step ? 'none' : '2px solid var(--border)',
-                            color: i < step || i === step ? '#fff' : 'var(--text-muted)',
-                            transition: 'all 0.3s',
-                        }}>
-                            {i < step ? <Check size={14} /> : i + 1}
-                        </div>
-                        <span style={{ fontSize: '0.62rem', fontWeight: 600, marginTop: '0.3rem', color: i === step ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                            {label}
-                        </span>
-                    </div>
-                    {i < STEPS.length - 1 && (
-                        <div style={{ flex: 1, height: 2, marginBottom: '1rem', marginInline: '0.3rem', background: i < step ? '#10b981' : 'var(--border)', transition: 'background 0.3s' }} />
-                    )}
-                </div>
-            ))}
-        </div>
-    );
+    const startOver = () => {
+        reset({
+            origin_country_id: '', origin_id: '', destination_country_id: '', destination_id: '',
+            pickup_address: '', destination_address: '', shipment_type: 'standard', transport_mode: 'air',
+            items: [{ ...EMPTY_ITEM, weight_kg: 0.5 }],
+        });
+        setTrackingNumber(''); setQuote(null); setIsDraftSuccess(false); setFurthestStep(0); setPickedAddress({});
+        if (draftId) router.replace('/shipments/new');
+        goToStep(0);
+    };
 
+    // ── Derived summary values ──
+    const items: any[] = watchedValues.items || [];
+    const totalWeight = items.reduce((n, i) => n + (Number(i.weight_kg) || 0) * (Number(i.quantity) || 1), 0);
+    const totalPieces = items.reduce((n, i) => n + (Number(i.quantity) || 1), 0);
+    const originName = findLocName(watchedValues.origin_id);
+    const destName = findLocName(watchedValues.destination_id);
+    const ModeIcon = MODE_META[watchedValues.transport_mode]?.icon || Plane;
+
+    // ── Done ──
     if (step === 4) {
         return (
-            <div style={{ padding: '2rem', maxWidth: 560, margin: '0 auto' }}>
-                <StepIndicator />
-                <div className="card fade-in" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-                    <div style={{ width: 76, height: 76, borderRadius: '50%', background: isDraftSuccess ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                        {isDraftSuccess ? <BookHeart size={36} color="var(--accent)" /> : <Check size={36} color="#10b981" />}
+            <div className="portal-page ns-page" ref={topRef}>
+                <div className="ns-done card fade-in">
+                    <div className={`ns-done-icon${isDraftSuccess ? ' draft' : ''}`}>
+                        {isDraftSuccess ? <BookHeart size={34} /> : <Check size={36} />}
                     </div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-                        {isDraftSuccess ? 'Draft Saved Successfully!' : 'Shipment Created!'}
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
-                        {isDraftSuccess 
-                            ? 'Your shipment has been saved as a draft. You can complete it anytime from your shipments list.'
-                            : 'Track your shipment with the number below.'}
+                    <h1>{isDraftSuccess ? 'Draft saved' : 'Shipment booked!'}</h1>
+                    <p>
+                        {isDraftSuccess
+                            ? 'Your shipment is saved as a draft. Finish booking it any time from My Shipments.'
+                            : 'We’ve received your booking. Our team will confirm it and schedule the pickup shortly.'}
                     </p>
-                    
                     {!isDraftSuccess && (
-                        <div style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: '1.25rem 2rem', marginBottom: '2rem', display: 'inline-block', border: '1px solid var(--border-light)' }}>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>Tracking Number</p>
-                            <p style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent)', fontFamily: 'monospace' }}>{trackingNumber}</p>
+                        <div className="ns-done-tn">
+                            <span>Tracking number</span>
+                            <strong>{trackingNumber}</strong>
                         </div>
                     )}
-
-                    <div style={{ display: 'flex', gap: '0.875rem', justifyContent: 'center' }}>
-                        <button onClick={() => router.push('/shipments')} className="btn btn-secondary">
-                            View Shipments
-                        </button>
-                        <button onClick={() => { setStep(0); setTrackingNumber(''); setQuote(null); setIsDraftSuccess(false); }} className="btn btn-primary">
-                            New Shipment
-                        </button>
+                    <div className="ns-done-actions">
+                        {!isDraftSuccess && (
+                            <Link href={`/dashboard/track?q=${encodeURIComponent(trackingNumber)}`} className="btn btn-primary"><Navigation size={16} /> Track shipment</Link>
+                        )}
+                        <Link href="/shipments" className="btn btn-secondary">View my shipments</Link>
+                        <button type="button" onClick={startOver} className="btn btn-secondary"><Plus size={16} /> Book another</button>
                     </div>
-
-                    <button onClick={() => router.push('/dashboard')} className="btn btn-sm" style={{ marginTop: '1.5rem', color: 'var(--text-muted)' }}>
-                        Go to Dashboard
-                    </button>
                 </div>
             </div>
-                        );
+        );
     }
 
-    return (
-        <div style={{ padding: '2rem', maxWidth: 720, margin: '0 auto', overflow: 'visible', minHeight: '600px' }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.25rem' }}>New Shipment</h1>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Step {step + 1} of 4 — {STEPS[step]}</p>
-            </div>
+    // ── Pickup / delivery step (same layout for both ends) ──
+    const renderLocationStep = (kind: 'pickup' | 'destination') => {
+        const isPickup = kind === 'pickup';
+        const list = isPickup ? hierarchy?.origins : hierarchy?.destinations;
+        const countryField = isPickup ? 'origin_country_id' : 'destination_country_id';
+        const cityField = isPickup ? 'origin_id' : 'destination_id';
+        const countryId = watchedValues[countryField];
+        const country = list?.find((c: any) => c.id === countryId);
 
-            <StepIndicator />
+        return (
+            <div className="fade-in">
+                <div className="ns-card">
+                    <div className="ns-card-head">
+                        <span className="ns-card-icon">{isPickup ? <MapPin size={18} /> : <Flag size={18} />}</span>
+                        <div>
+                            <h2>{isPickup ? 'Pickup details' : 'Delivery details'}</h2>
+                            <p>{isPickup ? 'Where should we collect your shipment?' : 'Where should we deliver it?'}</p>
+                        </div>
+                    </div>
 
-            <form noValidate style={{ overflow: 'visible', paddingBottom: '100px' }}>
-                {step === 0 && (
-                    <div className="fade-in">
-                        <div className="card">
-                            <h3 style={{ fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><MapPin size={18} /> Step 1: Pickup Origin</h3>
-                            
-                            {savedAddresses.length > 0 && (
-                                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 12 }}>
-                                    <label className="label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><BookHeart size={14} color="var(--accent)" /> Saved Addresses</label>
-                                    <select 
-                                        className="input" style={{ fontSize: '0.85rem' }}
-                                        onChange={(e) => {
-                                            const addr = savedAddresses.find(a => a.id === e.target.value);
-                                            if (addr) {
-                                                setValue('pickup_address', addr.address);
-                                                setValue('pickup_contact_name', addr.contact_name || '');
-                                                setValue('pickup_contact_phone', addr.contact_phone || '');
+                    {savedAddresses.length > 0 && (
+                        <div className="ns-saved">
+                            <p><BookHeart size={14} /> Use a saved address</p>
+                            <div className="ns-saved-list">
+                                {savedAddresses.map(a => (
+                                    <button
+                                        key={a.id}
+                                        type="button"
+                                        className={pickedAddress[kind] === a.id ? 'active' : ''}
+                                        onClick={() => {
+                                            setValue(`${kind}_address`, a.address, { shouldValidate: true });
+                                            setValue(`${kind}_contact_name`, a.contact_name || '');
+                                            setValue(`${kind}_contact_phone`, a.contact_phone || '');
+                                            setPickedAddress(p => ({ ...p, [kind]: a.id }));
+                                            // Saved addresses keep the country and town by name: pick the matching ones we serve
+                                            const same = (x?: string, y?: string) => !!x && !!y && x.trim().toLowerCase() === y.trim().toLowerCase();
+                                            const savedCountry = (list || []).find((c: any) => same(c.name, a.country) || same(c.code, a.country));
+                                            const savedCity = savedCountry?.cities.find((c: any) => same(c.name, a.city));
+                                            if (savedCountry) {
+                                                setValue(countryField, savedCountry.id, { shouldValidate: true });
+                                                setValue(cityField, savedCity?.id || '', { shouldValidate: !!savedCity });
+                                            }
+                                            if (!savedCountry || !savedCity) {
+                                                toast(`We don’t ${isPickup ? 'collect from' : 'deliver to'} ${a.city || a.country} yet. Choose the nearest ${savedCountry ? 'town' : 'country and town'}.`);
                                             }
                                         }}
                                     >
-                                        <option value="">Select a saved address...</option>
-                                        {savedAddresses.map(a => <option key={a.id} value={a.id}>{a.label} ({a.address.substring(0, 20)}...)</option>)}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <SearchableSelect 
-                                        label="Origin Country *" placeholder="Search country..."
-                                        options={hierarchy?.origins || []}
-                                        value={watchedValues.origin_country_id}
-                                        onChange={(val: string) => { setValue('origin_country_id', val); setValue('origin_id', ''); }}
-                                        error={errors.origin_country_id?.message}
-                                    />
-                                    <SearchableSelect 
-                                        label="Origin Town / City *" placeholder="Select town..."
-                                        options={hierarchy?.origins.find((c: any) => c.id === watchedValues.origin_country_id)?.cities || []}
-                                        value={watchedValues.origin_id}
-                                        onChange={(val: string) => setValue('origin_id', val)}
-                                        disabled={!watchedValues.origin_country_id}
-                                        error={errors.origin_id?.message}
-                                    />
-                                </div>
-
-                                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-                                    <GoogleAddressPicker 
-                                        label="Street Address / Details *"
-                                        placeholder="Enter pickup address..."
-                                        defaultValue={watchedValues.pickup_address}
-                                        countryCode={hierarchy?.origins.find((c: any) => c.id === watchedValues.origin_country_id)?.country_code}
-                                        onAddressSelect={(address, lat, lng) => {
-                                            setValue('pickup_address', address);
-                                            setValue('pickup_latitude', lat);
-                                            setValue('pickup_longitude', lng);
-                                        }}
-                                        error={errors.pickup_address?.message as string}
-                                        disabled={!googleMapsEnabled}
-                                    />
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                                    <div>
-                                        <label className="label">Contact Name</label>
-                                        <input {...register('pickup_contact_name')} className="input" placeholder="Person in charge" />
-                                    </div>
-                                    <div>
-                                        <label className="label">Contact Phone</label>
-                                        <input {...register('pickup_contact_phone')} className="input" placeholder="+..." />
-                                    </div>
-                                </div>
-
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem 0' }}>
-                                    <input type="checkbox" {...register('save_pickup_address')} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }} />
-                                    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Save to address book</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {step === 1 && (
-                    <div className="fade-in">
-                        <div className="card">
-                            <h3 style={{ fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><MapPin size={18} color="var(--accent)" /> Step 2: Destination</h3>
-                            
-                            {savedAddresses.length > 0 && (
-                                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 12 }}>
-                                    <label className="label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><BookHeart size={14} color="var(--accent)" /> Saved Addresses</label>
-                                    <select 
-                                        className="input" style={{ fontSize: '0.85rem' }}
-                                        onChange={(e) => {
-                                            const addr = savedAddresses.find(a => a.id === e.target.value);
-                                            if (addr) {
-                                                setValue('destination_address', addr.address);
-                                                setValue('destination_contact_name', addr.contact_name || '');
-                                                setValue('destination_contact_phone', addr.contact_phone || '');
-                                            }
-                                        }}
-                                    >
-                                        <option value="">Select a saved address...</option>
-                                        {savedAddresses.map(a => <option key={a.id} value={a.id}>{a.label} ({a.address.substring(0, 20)}...)</option>)}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <SearchableSelect 
-                                        label="Destination Country *" placeholder="Search country..."
-                                        options={hierarchy?.destinations || []}
-                                        value={watchedValues.destination_country_id}
-                                        onChange={(val: string) => { setValue('destination_country_id', val); setValue('destination_id', ''); }}
-                                        error={errors.destination_country_id?.message}
-                                    />
-                                    <SearchableSelect 
-                                        label="Destination Town / City *" placeholder="Select town..."
-                                        options={hierarchy?.destinations.find((c: any) => c.id === watchedValues.destination_country_id)?.cities || []}
-                                        value={watchedValues.destination_id}
-                                        onChange={(val: string) => setValue('destination_id', val)}
-                                        disabled={!watchedValues.destination_country_id}
-                                        error={errors.destination_id?.message}
-                                    />
-                                </div>
-
-                                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-                                    <GoogleAddressPicker 
-                                        label="Delivery Street Address *"
-                                        placeholder="Enter delivery address..."
-                                        defaultValue={watchedValues.destination_address}
-                                        countryCode={hierarchy?.destinations.find((c: any) => c.id === watchedValues.destination_country_id)?.country_code}
-                                        onAddressSelect={(address, lat, lng) => {
-                                            setValue('destination_address', address);
-                                            setValue('destination_latitude', lat);
-                                            setValue('destination_longitude', lng);
-                                        }}
-                                        error={errors.destination_address?.message as string}
-                                        disabled={!googleMapsEnabled}
-                                    />
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                                    <div>
-                                        <label className="label">Recipient Name</label>
-                                        <input {...register('destination_contact_name')} className="input" placeholder="Person receiving" />
-                                    </div>
-                                    <div>
-                                        <label className="label">Recipient Phone</label>
-                                        <input {...register('destination_contact_phone')} className="input" placeholder="+..." />
-                                    </div>
-                                </div>
-
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem 0' }}>
-                                    <input type="checkbox" {...register('save_destination_address')} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }} />
-                                    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Save to address book</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {step === 2 && (
-                    <div className="fade-in">
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>Package Items</p>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fields.length} {fields.length === 1 ? 'item' : 'items'} added</span>
-                            </div>
-
-                            {fields.map((field, idx) => {
-                                const isExpanded = (expandedItemIdx === idx);
-                                const itemValues = watchedValues.items?.[idx] || {};
-                                const category = categories.find(c => c.id === itemValues.category_id);
-                                
-                                return (
-                                    <div key={field.id} className={`card ${isExpanded ? 'expanded' : 'collapsed'}`} style={{ 
-                                        marginBottom: '0.75rem', 
-                                        padding: isExpanded ? '1.5rem' : '1rem 1.25rem',
-                                        cursor: isExpanded ? 'default' : 'pointer',
-                                        border: isExpanded ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        transition: 'all 0.2s ease-in-out'
-                                    }} onClick={() => !isExpanded && setExpandedItemIdx(idx)}>
-                                        
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: isExpanded ? 'var(--accent)' : 'var(--bg-secondary)', color: isExpanded ? 'white' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800 }}>
-                                                    {idx + 1}
-                                                </div>
-                                                {!isExpanded && (
-                                                    <div>
-                                                        <p style={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                                                            {itemValues.description || `Item ${idx + 1}`}
-                                                        </p>
-                                                        <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                                            {category ? `${category.icon} ${category.name}` : 'No category'} · {itemValues.weight_kg}kg · Qty: {itemValues.quantity}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {isExpanded && <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Item {idx + 1} Details</span>}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                {!isExpanded && <ChevronDown size={16} color="var(--text-muted)" />}
-                                                {fields.length > 1 && (
-                                                    <button type="button" onClick={(e) => { e.stopPropagation(); remove(idx); if (expandedItemIdx >= idx) setExpandedItemIdx(Math.max(0, expandedItemIdx - 1)); }} className="btn btn-danger btn-sm" style={{ padding: '0.4rem', borderRadius: 8 }}>
-                                                        <Trash2 size={13} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {isExpanded && (
-                                            <div className="fade-in" style={{ marginTop: '1.25rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
-                                                <div style={{ gridColumn: 'span 2' }}>
-                                                    <label className="label">Category *</label>
-                                                    <select {...register(`items.${idx}.category_id`)} className="input">
-                                                        <option value="">Select category…</option>
-                                                        {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div style={{ gridColumn: 'span 2' }}>
-                                                    <label className="label">Description *</label>
-                                                    <input {...register(`items.${idx}.description`)} className="input" placeholder="e.g. iPhone 15 Pro" />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Weight (kg) *</label>
-                                                    <input {...register(`items.${idx}.weight_kg`)} type="number" step="0.1" className="input" />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Quantity</label>
-                                                    <input {...register(`items.${idx}.quantity`)} type="number" min="1" className="input" />
-                                                </div>
-                                                <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
-                                                    <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedItemIdx(-1); }} className="btn btn-secondary btn-sm btn-full">
-                                                        Done Editing
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                            
-                            <button type="button" onClick={() => { append({ category_id: '', description: '', weight_kg: 1, quantity: 1 }); setExpandedItemIdx(fields.length); }} className="btn btn-secondary btn-full" style={{ borderStyle: 'dashed', background: 'transparent' }}>
-                                <Plus size={16} /> Add Another Item
-                            </button>
-                        </div>
-
-                        <div className="card" style={{ marginBottom: '1.25rem' }}>
-                            <p style={{ fontWeight: 700, marginBottom: '1rem', fontSize: '0.9rem' }}>Transport Mode</p>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                                {transportModes.map(t => (
-                                    <label key={t.value} style={{ cursor: 'pointer' }}>
-                                        <input type="radio" {...register('transport_mode')} value={t.value} style={{ display: 'none' }} />
-                                        <div style={{ border: `2px solid ${watchedValues.transport_mode === t.value ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 10, padding: '0.875rem', textAlign: 'center', background: watchedValues.transport_mode === t.value ? 'rgba(59,130,246,0.05)' : 'transparent', transition: 'all 0.2s' }}>
-                                            <div style={{ fontSize: '1.2rem' }}>{t.badge}</div>
-                                            <p style={{ fontWeight: 700, fontSize: '0.75rem' }}>{t.label}</p>
-                                        </div>
-                                    </label>
+                                        <strong>{a.label}</strong>
+                                        <span>{a.address}</span>
+                                    </button>
                                 ))}
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {step === 3 && (
-                    <div className="fade-in">
-                        <div className="card" style={{ marginBottom: '1rem' }}>
-                            <h3 style={{ fontWeight: 700, marginBottom: '1rem' }}>Step 4: Final Review</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 14 }}>
-                                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Origin</p>
-                                    <p style={{ fontWeight: 800, fontSize: '1rem' }}>{findLocName(watchedValues.origin_id)}</p>
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{findLocName(watchedValues.origin_country_id)}</p>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                                        {watchedValues.pickup_address}
-                                    </p>
-                                </div>
-                                <ArrowRight size={20} color="var(--accent)" />
-                                <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 14 }}>
-                                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Destination</p>
-                                    <p style={{ fontWeight: 800, fontSize: '1rem' }}>{findLocName(watchedValues.destination_id)}</p>
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{findLocName(watchedValues.destination_country_id)}</p>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                                        {watchedValues.destination_address}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Package Contents ({watchedValues.items.length} items)</p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    {watchedValues.items.map((item: any, i: number) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 10, fontSize: '0.85rem' }}>
-                                            <div>
-                                                <span style={{ fontWeight: 700 }}>{item.quantity}x</span> {item.description}
-                                                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                                                    {categories.find(c => c.id === item.category_id)?.name} · {item.weight_kg}kg
-                                                </p>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                {item.is_fragile && <span style={{ fontSize: '0.7rem' }}>🔮</span>}
-                                                {item.is_hazardous && <span style={{ fontSize: '0.7rem' }}>⚠️</span>}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            {quoteLoading ? (
-                                <div className="card" style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
-                                    <div className="spinner" />
-                                </div>
-                            ) : quote && (
-                                <div style={{ marginTop: '1rem' }}>
-                                    <div style={{ background: 'var(--accent)', color: 'white', padding: '1.5rem', borderRadius: 14, boxShadow: '0 8px 20px rgba(59,130,246,0.2)', marginBottom: '1.5rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', opacity: 0.9, fontSize: '0.9rem' }}>
-                                            <span>Shipping Subtotal</span>
-                                            <span style={{ fontWeight: 600 }}>${quote.total_price}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.75rem' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>Total Cost</span>
-                                            <span style={{ fontWeight: 900, fontSize: '1.5rem' }}>${quote.total_price}</span>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ padding: '1rem', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, marginBottom: '1.5rem' }}>
-                                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                            <AlertTriangle size={18} color="#f59e0b" />
-                                            <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#d97706' }}>Need assistance?</span>
-                                        </div>
-                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                                            If you have any questions about this quote or specific shipping requirements, please contact our <strong>Customer Care</strong> team before confirming.
-                                        </p>
-                                    </div>
-
-                                </div>
-                            )}
+                    <div className="ns-grid">
+                        <SearchableSelect
+                            id={`${kind}-country`}
+                            label="Country *"
+                            placeholder="Select country"
+                            options={list || []}
+                            value={countryId}
+                            onChange={val => { setValue(countryField, val, { shouldValidate: true }); setValue(cityField, ''); }}
+                            error={errors[countryField]?.message as string}
+                        />
+                        <SearchableSelect
+                            id={`${kind}-city`}
+                            label="Town / City *"
+                            placeholder={countryId ? 'Select town' : 'Choose a country first'}
+                            options={country?.cities || []}
+                            value={watchedValues[cityField]}
+                            onChange={val => setValue(cityField, val, { shouldValidate: true })}
+                            disabled={!countryId}
+                            error={errors[cityField]?.message as string}
+                        />
+                        <div className="span-2">
+                            <GoogleAddressPicker
+                                key={`${kind}-${pickedAddress[kind] || 'manual'}`}
+                                label={isPickup ? 'Street address / building *' : 'Delivery street address / building *'}
+                                placeholder={isPickup ? 'e.g. Bruce House, Standard Street' : 'e.g. Halane Road, near the airport'}
+                                defaultValue={watchedValues[`${kind}_address`]}
+                                countryCode={country?.country_code}
+                                onAddressSelect={(address, lat, lng) => {
+                                    setValue(`${kind}_address`, address, { shouldValidate: !!errors[`${kind}_address`] });
+                                    setValue(`${kind}_latitude`, lat);
+                                    setValue(`${kind}_longitude`, lng);
+                                }}
+                                error={errors[`${kind}_address`]?.message as string}
+                                disabled={!googleMapsEnabled}
+                            />
+                        </div>
+                        <div>
+                            <label className="label" htmlFor={`${kind}-contact`}>{isPickup ? 'Contact name' : 'Recipient name'}</label>
+                            <input id={`${kind}-contact`} {...register(`${kind}_contact_name`)} className="input" placeholder={isPickup ? 'Person handing over' : 'Person receiving'} autoComplete="name" />
+                        </div>
+                        <div>
+                            <label className="label" htmlFor={`${kind}-phone`}>{isPickup ? 'Contact phone' : 'Recipient phone'}</label>
+                            <input id={`${kind}-phone`} {...register(`${kind}_contact_phone`)} className="input" placeholder="+254 700 000 000" type="tel" autoComplete="tel" />
                         </div>
                     </div>
-                )}
-            </form>
 
-            <div style={{ 
-                position: 'fixed', bottom: 0, left: 0, right: 0, 
-                padding: '1.25rem 2rem', background: 'rgba(255,255,255,0.9)', 
-                backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)',
-                display: 'flex', justifyContent: 'center', zIndex: 1000,
-                boxShadow: '0 -4px 20px rgba(0,0,0,0.05)'
-            }}>
-                <div style={{ width: '100%', maxWidth: 720, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button 
-                        type="button" onClick={() => setStep(s => s - 1)} 
-                        disabled={step === 0 || isSubmitting} 
-                        className="btn btn-secondary" 
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: step === 0 ? 0 : 1 }}
-                    >
-                        <ArrowLeft size={16} /> Back
-                    </button>
-                    
-                    <div style={{ display: 'flex', gap: '1rem' }}>
+                    <label className="ns-check">
+                        <input type="checkbox" {...register(isPickup ? 'save_pickup_address' : 'save_destination_address')} />
+                        <span>Save this address to my address book</span>
+                    </label>
+                </div>
+            </div>
+        );
+    };
+
+    const itemErrors = (idx: number) => (errors.items as any)?.[idx] || {};
+
+    return (
+        <div className="portal-page ns-page" ref={topRef}>
+            <div className="portal-page-head">
+                <div>
+                    <h1>{draftId ? 'Finish your shipment' : 'New shipment'}</h1>
+                    <p>{draftId ? 'Pick up where you left off.' : 'Book a pickup in four quick steps — prices update as you go.'}</p>
+                </div>
+            </div>
+
+            {/* Stepper */}
+            <ol className="ns-stepper" aria-label="Booking steps">
+                {STEPS.map((s, i) => {
+                    const state = i < step ? 'done' : i === step ? 'current' : '';
+                    const canJump = i <= furthestStep && i !== step;
+                    return (
+                        <li key={s.label} className={state} aria-current={i === step ? 'step' : undefined}>
+                            <button type="button" disabled={!canJump} onClick={() => canJump && goToStep(i)}>
+                                <span className="ns-step-dot">{i < step ? <Check size={14} /> : i + 1}</span>
+                                <span className="ns-step-text">
+                                    <strong>{s.label}</strong>
+                                    <small>{s.hint}</small>
+                                </span>
+                            </button>
+                        </li>
+                    );
+                })}
+            </ol>
+
+            <div className="ns-layout">
+                <div className="ns-main">
+                    <form noValidate onSubmit={e => e.preventDefault()}>
+                        {step === 0 && renderLocationStep('pickup')}
+                        {step === 1 && renderLocationStep('destination')}
+
+                        {step === 2 && (
+                            <div className="fade-in">
+                                <div className="ns-card">
+                                    <div className="ns-card-head">
+                                        <span className="ns-card-icon"><Package size={18} /></span>
+                                        <div>
+                                            <h2>What are you sending?</h2>
+                                            <p>{fields.length} {fields.length === 1 ? 'item' : 'items'} · {totalWeight.toFixed(1)} kg total</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="ns-items">
+                                        {fields.map((field, idx) => {
+                                            const isExpanded = expandedItemIdx === idx;
+                                            const v = items[idx] || {};
+                                            const category = categories.find(c => c.id === v.category_id);
+                                            const ie = itemErrors(idx);
+                                            const hasError = Object.keys(ie).length > 0;
+                                            return (
+                                                <div key={field.id} className={`ns-item${isExpanded ? ' open' : ''}${hasError ? ' has-error' : ''}`}>
+                                                    <div className="ns-item-head">
+                                                        <button type="button" className="ns-item-toggle" onClick={() => setExpandedItemIdx(isExpanded ? -1 : idx)} aria-expanded={isExpanded}>
+                                                            <span className="ns-item-num">{idx + 1}</span>
+                                                            <span className="ns-item-title">
+                                                                <strong>{v.description || `Item ${idx + 1}`}</strong>
+                                                                <small>
+                                                                    {category ? category.name : 'No category yet'} · {Number(v.weight_kg) || 0} kg × {Number(v.quantity) || 1}
+                                                                    {v.is_fragile && ' · Fragile'}{v.is_hazardous && ' · Hazardous'}{v.requires_refrigeration && ' · Cold chain'}
+                                                                </small>
+                                                            </span>
+                                                            <ChevronDown size={18} className="ns-item-chevron" />
+                                                        </button>
+                                                        {fields.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                className="ns-icon-btn danger"
+                                                                aria-label={`Remove item ${idx + 1}`}
+                                                                onClick={() => { remove(idx); if (expandedItemIdx >= idx) setExpandedItemIdx(Math.max(0, expandedItemIdx - 1)); }}
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {isExpanded && (
+                                                        <div className="ns-item-body fade-in">
+                                                            <div className="ns-grid">
+                                                                <div>
+                                                                    <label className="label" htmlFor={`item-${idx}-cat`}>Category *</label>
+                                                                    <select id={`item-${idx}-cat`} {...register(`items.${idx}.category_id`, { onChange: e => applyCategoryDefaults(idx, e.target.value) })} className={`input${ie.category_id ? ' error' : ''}`}>
+                                                                        <option value="">Select category…</option>
+                                                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                                    </select>
+                                                                    {ie.category_id && <p className="field-error">{ie.category_id.message}</p>}
+                                                                    {(() => {
+                                                                        const cat = categories.find(c => c.id === v.category_id);
+                                                                        if (!cat) return null;
+                                                                        const bits = [
+                                                                            cat.max_weight_kg ? `up to ${Number(cat.max_weight_kg)} kg per piece` : null,
+                                                                            cat.allowed_modes?.length ? `${cat.allowed_modes.map(m => MODE_META[m]?.label || m).join(' or ')} only` : null,
+                                                                            cat.requires_declared_value ? 'declared value required' : null,
+                                                                        ].filter(Boolean);
+                                                                        return bits.length ? <p className="ns-hint">{bits.join(' · ')}</p> : null;
+                                                                    })()}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="label" htmlFor={`item-${idx}-desc`}>Description *</label>
+                                                                    <input id={`item-${idx}-desc`} {...register(`items.${idx}.description`)} className={`input${ie.description ? ' error' : ''}`} placeholder="e.g. Laptop, medical supplies" />
+                                                                    {ie.description && <p className="field-error">{ie.description.message}</p>}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="label" htmlFor={`item-${idx}-weight`}>Weight per piece (kg) *</label>
+                                                                    <input id={`item-${idx}-weight`} {...register(`items.${idx}.weight_kg`)} type="number" step="0.1" min="0" inputMode="decimal" className={`input${ie.weight_kg ? ' error' : ''}`} />
+                                                                    {ie.weight_kg && <p className="field-error">{ie.weight_kg.message}</p>}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="label" htmlFor={`item-${idx}-qty`}>Quantity</label>
+                                                                    <input id={`item-${idx}-qty`} {...register(`items.${idx}.quantity`)} type="number" min="1" inputMode="numeric" className="input" />
+                                                                </div>
+                                                                <div className="span-2">
+                                                                    <label className="label">Dimensions per piece (cm) <span className="ns-optional">optional</span></label>
+                                                                    <div className="ns-dims">
+                                                                        <input {...register(`items.${idx}.length_cm`)} type="number" min="0" inputMode="decimal" className="input" placeholder="Length" aria-label="Length in cm" />
+                                                                        <span>×</span>
+                                                                        <input {...register(`items.${idx}.width_cm`)} type="number" min="0" inputMode="decimal" className="input" placeholder="Width" aria-label="Width in cm" />
+                                                                        <span>×</span>
+                                                                        <input {...register(`items.${idx}.height_cm`)} type="number" min="0" inputMode="decimal" className="input" placeholder="Height" aria-label="Height in cm" />
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="label" htmlFor={`item-${idx}-value`}>Declared value (USD) {categories.find(c => c.id === v.category_id)?.requires_declared_value ? '*' : <span className="ns-optional">optional</span>}</label>
+                                                                    <input id={`item-${idx}-value`} {...register(`items.${idx}.declared_value`)} type="number" min="0" inputMode="decimal" className="input" placeholder="0.00" />
+                                                                </div>
+                                                                <div>
+                                                                    <span className="label">Handling</span>
+                                                                    <div className="ns-flags">
+                                                                        <label className={v.is_fragile ? 'on' : ''}><input type="checkbox" {...register(`items.${idx}.is_fragile`)} /><Info size={14} /> Fragile</label>
+                                                                        <label className={v.is_hazardous ? 'on' : ''}><input type="checkbox" {...register(`items.${idx}.is_hazardous`)} /><AlertTriangle size={14} /> Hazardous</label>
+                                                                        <label className={v.requires_refrigeration ? 'on' : ''}><input type="checkbox" {...register(`items.${idx}.requires_refrigeration`)} /><Snowflake size={14} /> Cold chain</label>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="span-2">
+                                                                    <label className="label" htmlFor={`item-${idx}-notes`}>Special instructions <span className="ns-optional">optional</span></label>
+                                                                    <input id={`item-${idx}-notes`} {...register(`items.${idx}.special_instructions`)} className="input" placeholder="e.g. Keep upright" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <button type="button" className="ns-add-item" onClick={() => { append({ ...EMPTY_ITEM }); setExpandedItemIdx(fields.length); }}>
+                                        <Plus size={16} /> Add another item
+                                    </button>
+                                </div>
+
+                                <div className="ns-card">
+                                    <div className="ns-card-head">
+                                        <span className="ns-card-icon"><ModeIcon size={18} /></span>
+                                        <div>
+                                            <h2>How should we ship it?</h2>
+                                            <p>{transportModes.length > 1 ? 'Choose a transport mode for this route.' : 'Available transport for this route.'}</p>
+                                        </div>
+                                    </div>
+                                    {routeUnpriced && (
+                                        <div className="ns-contact">
+                                            <AlertTriangle size={18} />
+                                            <div>
+                                                <strong>No set price for this route yet</strong>
+                                                <p>We still ship here — send us the details and our team will reply with a quote, usually within one business day.</p>
+                                            </div>
+                                            <button type="button" className="btn btn-primary btn-sm" onClick={openQuoteRequest}>Request a quote</button>
+                                        </div>
+                                    )}
+                                    <div className="ns-modes">
+                                        {transportModes.map(m => {
+                                            const meta = MODE_META[m];
+                                            const Icon = meta.icon;
+                                            return (
+                                                <label key={m} className={watchedValues.transport_mode === m ? 'active' : ''}>
+                                                    <input type="radio" {...register('transport_mode')} value={m} />
+                                                    <span className="ns-mode-icon"><Icon size={22} /></span>
+                                                    <strong>{meta.label}</strong>
+                                                    <small>{meta.blurb}</small>
+                                                    {watchedValues.transport_mode === m && <span className="ns-mode-check"><Check size={13} /></span>}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ marginTop: '1.25rem' }}>
+                                        <label className="label" htmlFor="ns-notes">Notes for our team <span className="ns-optional">optional</span></label>
+                                        <textarea id="ns-notes" {...register('notes')} className="input" rows={3} placeholder="Pickup times, gate codes, customs documents…" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 3 && (
+                            <div className="fade-in">
+                                <div className="ns-card">
+                                    <div className="ns-review-head">
+                                        <h2>Route</h2>
+                                        <button type="button" onClick={() => goToStep(0)}><Pencil size={13} /> Edit</button>
+                                    </div>
+                                    <div className="ns-route">
+                                        <div>
+                                            <span className="ns-route-label"><MapPin size={13} /> Pickup</span>
+                                            <strong>{originName}</strong>
+                                            <span>{findLocName(watchedValues.origin_country_id)}</span>
+                                            <p>{watchedValues.pickup_address}</p>
+                                            {(watchedValues.pickup_contact_name || watchedValues.pickup_contact_phone) && (
+                                                <p className="ns-route-contact">{[watchedValues.pickup_contact_name, watchedValues.pickup_contact_phone].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                        </div>
+                                        <div className="ns-route-arrow"><ModeIcon size={18} /></div>
+                                        <div>
+                                            <span className="ns-route-label"><Flag size={13} /> Delivery</span>
+                                            <strong>{destName}</strong>
+                                            <span>{findLocName(watchedValues.destination_country_id)}</span>
+                                            <p>{watchedValues.destination_address}</p>
+                                            {(watchedValues.destination_contact_name || watchedValues.destination_contact_phone) && (
+                                                <p className="ns-route-contact">{[watchedValues.destination_contact_name, watchedValues.destination_contact_phone].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="ns-card">
+                                    <div className="ns-review-head">
+                                        <h2>Package · {MODE_META[watchedValues.transport_mode]?.label}</h2>
+                                        <button type="button" onClick={() => goToStep(2)}><Pencil size={13} /> Edit</button>
+                                    </div>
+                                    <div className="ns-review-items">
+                                        {items.map((item, i) => {
+                                            const line = shownQuote?.item_breakdown?.[i];
+                                            return (
+                                                <div key={i}>
+                                                    <span className="ns-item-num">{Number(item.quantity) || 1}×</span>
+                                                    <span style={{ flex: 1, minWidth: 0 }}>
+                                                        <strong>{item.description}</strong>
+                                                        <small>
+                                                            {categories.find(c => c.id === item.category_id)?.name} · {item.weight_kg} kg each
+                                                            {item.is_fragile && ' · Fragile'}{item.is_hazardous && ' · Hazardous'}{item.requires_refrigeration && ' · Cold chain'}
+                                                        </small>
+                                                    </span>
+                                                    {line && <span className="ns-review-price">{money(line.price)}</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {watchedValues.notes && <p className="ns-review-notes"><strong>Notes:</strong> {watchedValues.notes}</p>}
+                                </div>
+
+                                <div className="ns-total">
+                                    {quoteLoading && !shownQuote ? (
+                                        <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}><div className="spinner" /></div>
+                                    ) : shownQuote ? (
+                                        <>
+                                            {shownQuote.breakdown && shownQuote.breakdown.length > 0 && (
+                                                <ul className="ns-breakdown">
+                                                    {shownQuote.breakdown.map(l => (
+                                                        <li key={l.key}><span>{l.label}{l.detail && <small> · {l.detail}</small>}</span><span>{money(l.amount)}</span></li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                            <div className="ns-total-row">
+                                                <span>Total to pay</span>
+                                                <strong>{money(shownQuote.total_price)}</strong>
+                                            </div>
+                                            <p className="ns-total-meta">
+                                                <Calendar size={14} /> Estimated delivery {shownQuote.estimated_days ? `in about ${shownQuote.estimated_days} days` : ''}
+                                                {shownQuote.estimated_delivery && ` · ${new Date(shownQuote.estimated_delivery).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}`}
+                                            </p>
+                                        </>
+                                    ) : shownProblem ? (
+                                        <div className="ns-contact">
+                                            <AlertTriangle size={18} />
+                                            <div>
+                                                <strong>{shownProblem.contact ? 'Let us quote this one' : 'Check your items'}</strong>
+                                                <p>{shownProblem.message}</p>
+                                            </div>
+                                            {shownProblem.contact && <button type="button" className="btn btn-primary btn-sm" onClick={openQuoteRequest}>Request a quote</button>}
+                                        </div>
+                                    ) : (
+                                        <p className="ns-total-meta"><AlertTriangle size={14} /> Add your route and items to see a price.</p>
+                                    )}
+                                </div>
+
+                                <p className="ns-help">
+                                    <Info size={15} /> Questions about this quote or special requirements? <Link href="/dashboard/support">Contact customer care</Link> before confirming.
+                                </p>
+                            </div>
+                        )}
+                    </form>
+
+                    {/* Actions — inside the content column so they never cover the sidebar or tab bar */}
+                    <div className="ns-actions">
+                        <button type="button" onClick={() => goToStep(step - 1)} disabled={step === 0 || isSubmitting} className="btn btn-secondary ns-back" style={{ visibility: step === 0 ? 'hidden' : 'visible' }}>
+                            <ArrowLeft size={16} /> <span>Back</span>
+                        </button>
+                        <div className="ns-actions-estimate">
+                            <span>Estimate</span>
+                            <strong>{quoteLoading ? '…' : shownQuote ? money(shownQuote.total_price) : shownProblem?.contact ? 'On request' : '—'}</strong>
+                        </div>
                         {step < 3 ? (
-                            <button 
-                                type="button" onClick={goNext} 
-                                className="btn btn-primary" 
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 2.5rem' }}
-                            >
+                            <button type="button" onClick={goNext} className="btn btn-primary ns-next">
                                 Continue <ArrowRight size={16} />
                             </button>
                         ) : (
-                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                <button 
-                                    type="button" disabled={draftLoading || isSubmitting} 
-                                    onClick={() => {
-                                        const currentData = getValues();
-                                        onSubmit(currentData as any, 'draft');
-                                    }}
-                                    className="btn btn-secondary"
-                                >
-                                    {draftLoading ? <div className="spinner" /> : 'Save Draft'}
+                            <div className="ns-final">
+                                <button type="button" disabled={draftLoading || isSubmitting} onClick={() => onSubmit(getValues() as any, 'draft')} className="btn btn-secondary">
+                                    {draftLoading ? <div className="spinner" /> : 'Save draft'}
                                 </button>
-                                <button 
-                                    type="button" disabled={isSubmitting || draftLoading || !quote} 
-                                    onClick={() => handleSubmit((data) => onSubmit(data, 'pending'))()} 
-                                    className="btn btn-primary" 
-                                    style={{ padding: '0.75rem 2.5rem' }}
-                                >
-                                    {isSubmitting ? <div className="spinner" style={{ borderTopColor: 'white' }} /> : 'Confirm & Ship'}
+                                <button type="button" disabled={isSubmitting || draftLoading || !shownQuote} onClick={() => handleSubmit(data => onSubmit(data, 'pending'))()} className="btn btn-primary">
+                                    {isSubmitting ? <div className="spinner" /> : <>Confirm &amp; book <Check size={16} /></>}
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Live summary */}
+                <aside className="ns-summary">
+                    <div className="ns-summary-card">
+                        <h3>Shipment summary</h3>
+                        <div className="ns-summary-route">
+                            <div className={originName ? '' : 'empty'}>
+                                <span><MapPin size={13} /> From</span>
+                                <strong>{originName || 'Choose pickup'}</strong>
+                            </div>
+                            <div className={destName ? '' : 'empty'}>
+                                <span><Flag size={13} /> To</span>
+                                <strong>{destName || 'Choose delivery'}</strong>
+                            </div>
+                        </div>
+                        <dl>
+                            <dt><ModeIcon size={14} /> Transport</dt><dd>{MODE_META[watchedValues.transport_mode]?.label || '—'}</dd>
+                            <dt><Package size={14} /> Pieces</dt><dd>{totalPieces}</dd>
+                            <dt><Weight size={14} /> Total weight</dt><dd>{totalWeight.toFixed(1)} kg</dd>
+                            {shownQuote?.estimated_days ? <><dt><Calendar size={14} /> Transit</dt><dd>~{shownQuote.estimated_days} days</dd></> : null}
+                        </dl>
+                        <div className="ns-summary-price">
+                            <span>Estimated price</span>
+                            {quoteLoading ? <div className="spinner" /> : shownQuote ? <strong>{money(shownQuote.total_price)}</strong>
+                                : shownProblem ? <small className="ns-summary-problem">{shownProblem.contact ? <>No set price — <button type="button" className="ns-link-btn" onClick={openQuoteRequest}>request a quote</button></> : shownProblem.message}</small>
+                                    : <small>Add your route and items to see a price</small>}
+                        </div>
+                    </div>
+                    <p className="ns-summary-note">
+                        <Info size={14} /> Prices are confirmed by our team when your pickup is scheduled.
+                    </p>
+                </aside>
             </div>
+
+            <QuoteRequestModal open={!!quoteRequest} onClose={() => setQuoteRequest(null)} prefill={quoteRequest || undefined} />
         </div>
     );
 }

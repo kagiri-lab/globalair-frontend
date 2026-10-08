@@ -1,0 +1,125 @@
+/* Toast notifications (components/AppToaster.tsx) */
+.atoast {
+  --tone: #2563eb;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 260px;
+  max-width: min(380px, calc(100vw - 28px));
+  padding: 0.75rem 0.6rem 0.8rem 0.85rem;
+  background: #fff;
+  color: #1f2937;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+/* The coloured edge */
+.atoast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--tone);
+}
+
+.atoast.is-success { --tone: #10b981; }
+.atoast.is-error { --tone: #e53a40; }
+.atoast.is-loading { --tone: #64748b; }
+
+.atoast.in { animation: atoast-in 0.32s cubic-bezier(0.21, 1.02, 0.73, 1) both; }
+.atoast.out { animation: atoast-out 0.2s ease-in both; }
+
+.atoast-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tone);
+  color: #fff;
+}
+
+.atoast-icon.custom { background: none; color: inherit; font-size: 1.1rem; }
+
+.atoast-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.atoast-text strong {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.atoast-text span { color: #4b5563; }
+.atoast-text strong + span { font-size: 0.84rem; }
+
+.atoast-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 0.3rem;
+  margin: -0.1rem 0 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.atoast-close:hover { background: #f3f4f6; color: #374151; }
+.atoast-close:focus-visible { outline: 2px solid var(--tone); outline-offset: 1px; }
+
+/* Time left: shrinks away; pauses while hovered */
+.atoast-timer {
+  position: absolute;
+  left: 4px;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--tone);
+  opacity: 0.55;
+  transform-origin: left;
+  animation-name: atoast-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.atoast:hover .atoast-timer { animation-play-state: paused; }
+
+.atoast-spin {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #fff;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: atoast-spin 0.7s linear infinite;
+}
+
+@keyframes atoast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes atoast-spin { to { transform: rotate(360deg); } }
+@keyframes atoast-in { from { opacity: 0; transform: translateY(-10px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes atoast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.96); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .atoast.in, .atoast.out { animation-duration: 0.01s; }
+  .atoast-timer { display: none; }
+}

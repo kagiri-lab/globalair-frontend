@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isProtectedPath, loginUrl } from './roles';
 
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5005/api',
@@ -16,22 +17,20 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// On 401 → clear token and redirect to login
+// On 401 → the session is invalid: clear it, and send the user to sign in if they are in a protected area.
+// (403 means "signed in but not allowed" — pages handle it themselves, the session stays.)
 api.interceptors.response.use(
     (res) => res,
     (error) => {
         const isLogRequest = error.config?.url?.endsWith('/logs');
         if (error.response?.status === 401 && !isLogRequest && typeof window !== 'undefined') {
-            // Clear local storage
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            document.cookie = 'auth_token=; path=/; max-age=0';
 
-            // Clear cookies
-            document.cookie = 'token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-
-            // Avoid infinite loops if already on login page
-            if (!window.location.pathname.includes('/login')) {
-                window.location.href = '/login?expired=true';
+            const { pathname, search } = window.location;
+            if (isProtectedPath(pathname)) {
+                window.location.href = loginUrl(pathname + search, { expired: true });
             }
         }
         return Promise.reject(error);

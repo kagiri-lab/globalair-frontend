@@ -113,7 +113,15 @@ export default function SupportHub() {
                                         </div>
                                         <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                             <span>#{t.id.slice(0, 8)}</span>
-                                            <span>{t.category}</span>
+                                            <span>{t.category === 'quote' ? 'Quote request' : t.category}</span>
+                                            {(() => {
+                                                // A price waiting for them to accept
+                                                let d = t.quote_details;
+                                                try { if (typeof d === 'string') d = JSON.parse(d); } catch { d = null; }
+                                                return !t.shipment_id && d?.offer?.status === 'sent' && d.offer.valid_until >= new Date().toISOString().slice(0, 10)
+                                                    ? <span style={{ fontWeight: 700, color: '#047857' }}>Price ready: ${Number(d.offer.amount).toFixed(2)}</span>
+                                                    : null;
+                                            })()}
                                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={12} /> {new Date(t.updated_at).toLocaleDateString()}</span>
                                         </div>
                                     </div>

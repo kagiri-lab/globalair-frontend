@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-    const { id } = await params;
+export async function generateMetadata(): Promise<Metadata> {
     return {
-        title: `Invoice - Shipment ${id}`,
+        title: 'Invoice',
     };
 }
 

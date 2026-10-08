@@ -5,9 +5,13 @@ export interface User {
     name: string;
     email: string;
     phone?: string;
-    role: 'user' | 'admin';
+    /** 'customer' for shipping customers; staff roles are listed in lib/roles.ts */
+    role: string;
+    permissions?: string[] | string;
     is_active: boolean;
     created_at: string;
+    /** Account made with a temporary password: must choose their own before using the portal */
+    must_change_password?: boolean | number;
 }
 
 export interface ProductCategory {
@@ -15,10 +19,17 @@ export interface ProductCategory {
     name: string;
     description: string;
     icon: string;
-    base_rate_per_kg: number;
     min_weight_kg: number;
     max_weight_kg: number | null;
     requires_special_handling: boolean;
+    allowed_modes?: TransportMode[] | null;     // null = every mode
+    default_fragile?: boolean;
+    default_hazardous?: boolean;
+    default_refrigeration?: boolean;
+    requires_declared_value?: boolean;
+    // Staff-only fields (admin API)
+    price_adjustment_pct?: number;
+    handling_fee?: number;
 }
 
 export interface ShipmentItem {
@@ -82,6 +93,11 @@ export interface Shipment {
     picked_up_at?: string;
     delivered_at?: string;
     notes?: string;
+    /** Billing: 'prepaid' (invoice, pay before pickup) or 'monthly' (on the account's statement) */
+    billing?: 'prepaid' | 'monthly';
+    payment_status?: 'unpaid' | 'paid' | 'on_account';
+    invoice_sent_at?: string | null;
+    paid_at?: string | null;
     items?: ShipmentItem[];
     tracking_events?: TrackingEvent[];
     created_at: string;
@@ -96,6 +112,7 @@ export interface TrackingEvent {
     description?: string;
     location?: string;
     event_time: string;
+    attribution?: string | null;
 }
 
 // ── Request Payloads ──────────────────────────────────────────────────────────
@@ -144,14 +161,23 @@ export interface QuotePayload {
     items: Pick<NewItemPayload, 'category_id' | 'weight_kg' | 'quantity'>[];
 }
 
+export interface QuoteLine { key: string; label: string; detail?: string; amount: number }
+
 export interface QuoteResult {
     total_price: number;
+    subtotal?: number;
+    tax?: number;
     currency: string;
-    distance_tier: string;
+    chargeable_weight?: number;
+    estimated_days?: number;
     estimated_delivery: string;
     shipment_type: ShipmentType;
-    item_breakdown: { description: string; category: string; weight_kg: number; quantity: number; price: number }[];
+    breakdown?: QuoteLine[];
+    item_breakdown: { description: string; category: string; weight_kg: number; quantity: number; chargeable_weight?: number; price: number }[];
 }
+
+/** Why a route/shipment couldn't be priced (422 from /shipments/quote) */
+export interface QuoteProblem { code?: string; message: string; contact?: boolean; available_modes?: TransportMode[]; allowed_modes?: TransportMode[] }
 
 // ── API Response wrapper ───────────────────────────────────────────────────────
 

@@ -143,6 +143,21 @@ export default function ShipmentDetailPage() {
                             <span style={{ fontWeight: 700, textTransform: label === 'Type' ? 'capitalize' : 'none', color: label === 'Total Price' ? 'var(--accent)' : 'var(--text-primary)' }}>{val}</span>
                         </div>
                     ))}
+                    {/* Payment */}
+                    <div className={`cps-pay${shipment.payment_status === 'paid' ? ' paid' : shipment.billing === 'monthly' ? ' account' : ['pending', 'draft', 'cancelled', 'failed'].includes(shipment.status) ? ' account' : ' due'}`}>
+                        <strong>
+                            {shipment.payment_status === 'paid' ? `Paid${shipment.paid_at ? ` on ${new Date(shipment.paid_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}`
+                                : shipment.billing === 'monthly' ? 'On your monthly statement'
+                                    : ['pending', 'draft'].includes(shipment.status) ? 'Invoice sent once we confirm'
+                                        : ['cancelled', 'failed'].includes(shipment.status) ? 'No payment needed'
+                                            : 'Payment due before pickup'}
+                        </strong>
+                        {shipment.payment_status !== 'paid' && shipment.billing !== 'monthly' && !['pending', 'draft', 'cancelled', 'failed'].includes(shipment.status) && (
+                            <span>We collect your shipment once it’s paid. <Link href="/dashboard/billing">How to pay</Link></span>
+                        )}
+                        {!['pending', 'draft'].includes(shipment.status) && <Link href={`/shipments/${shipment.id}/invoice`} className="cps-pay-link">View invoice</Link>}
+                    </div>
+
                     {shipment.notes && (
                         <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                             <p style={{ fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Notes</p>
@@ -167,9 +182,9 @@ export default function ShipmentDetailPage() {
                                         {item.length_cm && ` · ${item.length_cm}×${item.width_cm}×${item.height_cm} cm`}
                                     </p>
                                     <div style={{ display: 'flex', gap: '0.375rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                                        {item.is_fragile && <span className="badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🔮 Fragile</span>}
-                                        {item.is_hazardous && <span className="badge" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>⚠️ Hazardous</span>}
-                                        {item.requires_refrigeration && <span className="badge" style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>❄️ Refrigeration</span>}
+                                        {!!item.is_fragile && <span className="badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🔮 Fragile</span>}
+                                        {!!item.is_hazardous && <span className="badge" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>⚠️ Hazardous</span>}
+                                        {!!item.requires_refrigeration && <span className="badge" style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>❄️ Refrigeration</span>}
                                     </div>
                                 </div>
                             </div>
@@ -208,6 +223,11 @@ export default function ShipmentDetailPage() {
                             ))}
                         </div>
                     </div>
+                    {/* Credit required when updates came from a partner's tracking data */}
+                    {(() => {
+                        const credits = [...new Set(shipment.tracking_events.map((e: { attribution?: string | null }) => e.attribution).filter(Boolean))];
+                        return credits.length > 0 && <p style={{ marginTop: '1.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{credits.join(' · ')}</p>;
+                    })()}
                 </div>
             )}
             {/* Cancel Confirmation Modal */}

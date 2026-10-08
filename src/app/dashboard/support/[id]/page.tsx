@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Send, User, Clock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Send, User, CheckCircle, Package, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/lib/auth';
+import QuoteOfferCard from '@/components/portal/QuoteOfferCard';
 
 export default function TicketDetail() {
     const { id } = useParams<{ id: string }>();
@@ -70,6 +71,19 @@ export default function TicketDetail() {
                 </div>
             </div>
 
+            <QuoteOfferCard ticket={ticket} onChanged={loadData} />
+
+            {ticket.shipment && (
+                <Link href={`/shipments/${ticket.shipment.id}`} className="card" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.9rem 1.1rem', marginBottom: '1rem', textDecoration: 'none', borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.06)' }}>
+                    <Package size={20} color="var(--success)" />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: 'block', color: 'var(--text-primary)', fontSize: '0.92rem' }}>Booked as shipment {ticket.shipment.tracking_number}</strong>
+                        <small style={{ color: 'var(--text-secondary)' }}>View its status and invoice</small>
+                    </span>
+                    <ChevronRight size={18} color="var(--text-muted)" />
+                </Link>
+            )}
+
             <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
                 {/* Messages Area */}
                 <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -91,7 +105,9 @@ export default function TicketDetail() {
                                     fontSize: '0.9rem',
                                     borderBottomRightRadius: isMe ? 2 : 14,
                                     borderBottomLeftRadius: isMe ? 14 : 2,
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                    whiteSpace: 'pre-wrap',
+                                    overflowWrap: 'anywhere'
                                 }}>
                                     {m.message}
                                 </div>
@@ -113,7 +129,7 @@ export default function TicketDetail() {
 
                 {/* Reply Area */}
                 {ticket.status !== 'closed' ? (
-                    <form onSubmit={handleSend} style={{ padding: '1.25rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '0.75rem', background: 'var(--bg-main)' }}>
+                    <form id="reply" onSubmit={handleSend} style={{ padding: '1.25rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '0.75rem', background: 'var(--bg-main)' }}>
                         <input 
                             className="input" 
                             placeholder="Type your message..." 

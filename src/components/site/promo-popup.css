@@ -1,0 +1,269 @@
+/* ── Promo popup (website + settings preview) ─────────────────────────────── */
+.promo-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(5, 8, 15, 0.72);
+  backdrop-filter: blur(3px);
+  animation: promoFade 0.25s ease;
+}
+
+.promo-backdrop .promo-card {
+  animation: promoRise 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.promo-card {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.promo-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.promo-close:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* Image mode */
+.promo-image img {
+  display: block;
+  width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  background: #fff;
+}
+
+/* Designed message */
+.promo-content {
+  min-height: 340px;
+  display: flex;
+  align-items: flex-end;
+  background-color: #282c37;
+  background-size: cover;
+  background-position: center;
+  border-top: 5px solid #e53a40;
+}
+
+.promo-content:not(.has-bg) {
+  align-items: center;
+}
+
+.promo-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(10, 12, 18, 0.72);
+}
+
+.promo-body {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 2.4rem 2rem 2rem;
+  font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+}
+
+.promo-content.align-center .promo-body {
+  text-align: center;
+}
+
+.promo-badge {
+  display: inline-block;
+  margin-bottom: 0.9rem;
+  padding: 0.3rem 0.75rem;
+  background: #e53a40;
+  color: #fff;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.promo-highlight {
+  margin: 0 0 0.2rem;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: clamp(2.2rem, 9vw, 3.1rem);
+  font-weight: 800;
+  line-height: 1;
+  color: #e53a40;
+}
+
+.promo-title {
+  margin: 0 0 0.7rem;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: clamp(1.35rem, 5vw, 1.7rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.promo-message {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.3rem;
+}
+
+.promo-content.align-center .promo-actions {
+  justify-content: center;
+}
+
+.promo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 46px;
+  padding: 0.7rem 1.4rem;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: transform 0.15s, background 0.2s, color 0.2s;
+}
+
+.promo-btn:hover {
+  transform: translateY(-1px);
+}
+
+.promo-btn.primary {
+  background: #e53a40;
+  color: #fff;
+}
+
+.promo-btn.primary:hover {
+  background: #c92f35;
+}
+
+.promo-btn.secondary {
+  border: 1.5px solid currentColor;
+}
+
+.promo-footnote {
+  margin: 1rem 0 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+/* Themes (without a photo; a photo always uses light text on the darkened image) */
+.promo-content.theme-dark,
+.promo-content.has-bg {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.promo-content.theme-dark .promo-title,
+.promo-content.has-bg .promo-title {
+  color: #fff;
+}
+
+.promo-content.theme-dark .promo-btn.secondary,
+.promo-content.has-bg .promo-btn.secondary {
+  color: #fff;
+}
+
+.promo-content.theme-light:not(.has-bg) {
+  background-color: #fff;
+  color: #555;
+}
+
+.promo-content.theme-light:not(.has-bg) .promo-title {
+  color: #1f2937;
+}
+
+.promo-content.theme-light:not(.has-bg) .promo-btn.secondary {
+  color: #1f2937;
+}
+
+.promo-content.theme-light:not(.has-bg) .promo-close {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1f2937;
+}
+
+.promo-content.theme-brand:not(.has-bg) {
+  background-color: #e53a40;
+  border-top-color: #282c37;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.promo-content.theme-brand:not(.has-bg) .promo-title,
+.promo-content.theme-brand:not(.has-bg) .promo-highlight {
+  color: #fff;
+}
+
+.promo-content.theme-brand:not(.has-bg) .promo-badge {
+  background: #282c37;
+}
+
+.promo-content.theme-brand:not(.has-bg) .promo-btn.primary {
+  background: #fff;
+  color: #e53a40;
+}
+
+.promo-content.theme-brand:not(.has-bg) .promo-btn.secondary {
+  color: #fff;
+}
+
+@keyframes promoFade {
+  from { opacity: 0; }
+}
+
+@keyframes promoRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+}
+
+@media (max-width: 480px) {
+  .promo-body {
+    padding: 2.2rem 1.4rem 1.6rem;
+  }
+
+  .promo-btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promo-backdrop,
+  .promo-backdrop .promo-card {
+    animation: none;
+  }
+}
+
+.promo-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.9rem;
+}

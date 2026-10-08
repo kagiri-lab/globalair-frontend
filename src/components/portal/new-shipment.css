@@ -1,0 +1,1267 @@
+/* ── New shipment wizard (customer portal) ─────────────────────────────────── */
+
+.ns-page .portal-page-head {
+  margin-bottom: 1.25rem;
+}
+
+/* Stepper */
+.ns-stepper {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.ns-stepper li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+
+.ns-stepper li button:not(:disabled) {
+  cursor: pointer;
+}
+
+.ns-stepper li button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.ns-stepper li button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: transparent;
+}
+
+.ns-stepper li.current button {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(229, 58, 64, 0.12);
+}
+
+.ns-stepper li.current button::after {
+  background: var(--accent);
+}
+
+.ns-stepper li.done button::after {
+  background: var(--success);
+}
+
+.ns-step-dot {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.ns-stepper li.current .ns-step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ns-stepper li.done .ns-step-dot {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.ns-step-text {
+  min-width: 0;
+}
+
+.ns-step-text strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ns-step-text small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Two-column layout */
+.ns-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.ns-main {
+  min-width: 0;
+}
+
+/* Cards */
+.ns-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.ns-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.35rem;
+}
+
+.ns-card-head h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.ns-card-head p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ns-card-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(229, 58, 64, 0.1);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ns-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.1rem;
+}
+
+.ns-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.ns-page .input {
+  height: 44px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ns-page textarea.input {
+  height: auto;
+  min-height: 88px;
+  padding-top: 0.7rem;
+  resize: vertical;
+}
+
+.ns-optional {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Saved addresses */
+.ns-saved {
+  margin-bottom: 1.35rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+}
+
+.ns-saved > p {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.65rem;
+}
+
+.ns-saved > p svg {
+  color: var(--accent);
+}
+
+.ns-saved-list {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 0.2rem;
+}
+
+.ns-saved-list button {
+  flex: 0 0 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.65rem 0.8rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ns-saved-list button:hover {
+  border-color: var(--accent);
+}
+
+.ns-saved-list button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(229, 58, 64, 0.12);
+}
+
+.ns-saved-list strong {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.ns-saved-list span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Searchable select */
+.ns-select {
+  position: relative;
+}
+
+.ns-select.open {
+  z-index: 30;
+}
+
+.ns-select-trigger {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.85rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ns-select-trigger .placeholder {
+  color: var(--text-muted);
+}
+
+.ns-select-trigger svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.ns-select.open .ns-select-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(229, 58, 64, 0.12);
+}
+
+.ns-select.open .ns-select-trigger svg {
+  transform: rotate(180deg);
+}
+
+.ns-select-trigger:disabled {
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+}
+
+.ns-select-trigger.error {
+  border-color: var(--danger);
+}
+
+.ns-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.ns-select-search {
+  position: relative;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ns-select-search svg {
+  position: absolute;
+  left: 1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.ns-select-search .input {
+  height: 38px;
+  padding-left: 2rem;
+  background: var(--bg-secondary);
+}
+
+.ns-select-menu ul {
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0.3rem;
+}
+
+.ns-select-menu li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ns-select-menu li button:hover {
+  background: var(--bg-secondary);
+}
+
+.ns-select-menu li button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ns-select-empty {
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.ns-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ns-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+/* Items */
+.ns-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ns-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ns-item.open {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(229, 58, 64, 0.08);
+}
+
+.ns-item.has-error {
+  border-color: var(--danger);
+}
+
+.ns-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+}
+
+.ns-item-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ns-item-num {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 0.35rem;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ns-item.open .ns-item-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ns-item-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.ns-item-title strong,
+.ns-item-title small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ns-item-title strong {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.ns-item-title small {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.ns-item-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.ns-item.open .ns-item-chevron {
+  transform: rotate(180deg);
+}
+
+.ns-icon-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ns-icon-btn.danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(229, 58, 64, 0.05);
+}
+
+.ns-item-body {
+  border-top: 1px solid var(--border);
+  padding: 1.1rem 1rem 1.2rem;
+}
+
+.ns-dims {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ns-dims span {
+  color: var(--text-muted);
+}
+
+.ns-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ns-flags label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 36px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ns-flags input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ns-flags label.on {
+  border-color: var(--accent);
+  background: rgba(229, 58, 64, 0.08);
+  color: var(--accent);
+}
+
+.ns-flags label:focus-within {
+  box-shadow: 0 0 0 3px rgba(229, 58, 64, 0.15);
+}
+
+.ns-add-item {
+  width: 100%;
+  margin-top: 0.85rem;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1.5px dashed var(--border-light);
+  border-radius: 12px;
+  background: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ns-add-item:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Transport modes */
+.ns-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.ns-modes label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ns-modes input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ns-modes label.active {
+  border-color: var(--accent);
+  background: rgba(229, 58, 64, 0.04);
+}
+
+.ns-modes label:focus-within {
+  box-shadow: 0 0 0 3px rgba(229, 58, 64, 0.15);
+}
+
+.ns-mode-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  margin-bottom: 0.3rem;
+}
+
+.ns-modes label.active .ns-mode-icon {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ns-modes strong {
+  font-size: 0.9rem;
+}
+
+.ns-modes small {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.ns-mode-check {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Review */
+.ns-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.ns-review-head h2 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ns-review-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.ns-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.ns-route > div:not(.ns-route-arrow) {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  min-width: 0;
+}
+
+.ns-route-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.35rem;
+}
+
+.ns-route strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.ns-route span:not(.ns-route-label) {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ns-route p {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.ns-route p.ns-route-contact {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+}
+
+.ns-route-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+
+.ns-review-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.ns-review-items > div {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ns-review-items > div:last-child {
+  border-bottom: none;
+}
+
+.ns-review-items strong,
+.ns-review-items small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ns-review-items strong {
+  font-size: 0.9rem;
+}
+
+.ns-review-items small {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.ns-review-price {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.ns-review-notes {
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.ns-total {
+  background: var(--portal-dark);
+  color: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ns-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.ns-total-row span {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ns-total-row strong {
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.ns-total-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ns-total-meta svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ns-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.ns-help svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.ns-help a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Action bar — sticky at the bottom of the content column */
+.ns-actions {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+}
+
+.ns-actions .btn {
+  height: 44px;
+}
+
+.ns-actions-estimate {
+  flex: 1;
+  min-width: 0;
+  display: none;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.ns-actions-estimate span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ns-actions-estimate strong {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+}
+
+.ns-next {
+  margin-left: auto;
+  padding: 0 1.75rem;
+}
+
+.ns-final {
+  margin-left: auto;
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* Summary */
+.ns-summary {
+  position: sticky;
+  top: 88px;
+}
+
+.ns-summary-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+}
+
+.ns-summary-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.ns-summary-route {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-left: 0.9rem;
+  border-left: 2px dashed var(--border-light);
+  margin-bottom: 1rem;
+}
+
+.ns-summary-route span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.ns-summary-route strong {
+  font-size: 0.95rem;
+}
+
+.ns-summary-route .empty strong {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.ns-summary-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.85rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.ns-summary-card dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+}
+
+.ns-summary-card dd {
+  text-align: right;
+  font-weight: 600;
+}
+
+.ns-summary-price {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--portal-dark);
+  color: #fff;
+}
+
+.ns-summary-price span {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ns-summary-price strong {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.ns-summary-price small {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ns-summary-note {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.ns-summary-note svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* Done */
+.ns-done {
+  max-width: 560px;
+  margin: 2rem auto;
+  text-align: center;
+  padding: 2.5rem 2rem !important;
+}
+
+.ns-done h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.ns-done p {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.ns-done-icon {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ns-done-icon.draft {
+  background: rgba(229, 58, 64, 0.1);
+  color: var(--accent);
+}
+
+.ns-done-tn {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.75rem;
+  margin-bottom: 1.75rem;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-light);
+}
+
+.ns-done-tn span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.ns-done-tn strong {
+  font-family: monospace;
+  font-size: 1.35rem;
+  color: var(--accent);
+}
+
+.ns-done-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Tablet: summary moves under the form, estimate shows in the action bar ── */
+@media (max-width: 1100px) {
+  .ns-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ns-summary {
+    position: static;
+    order: -1;
+    display: none;
+  }
+
+  .ns-actions-estimate {
+    display: flex;
+  }
+
+  .ns-next,
+  .ns-final {
+    margin-left: 0;
+  }
+}
+
+/* ── Phones ──────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .ns-stepper {
+    gap: 0.35rem;
+  }
+
+  .ns-stepper li button {
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem 0.25rem;
+    text-align: center;
+  }
+
+  .ns-step-text small {
+    display: none;
+  }
+
+  .ns-step-text strong {
+    font-size: 0.72rem;
+  }
+
+  .ns-card {
+    padding: 1.1rem;
+    border-radius: 12px;
+  }
+
+  .ns-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ns-route {
+    grid-template-columns: 1fr;
+  }
+
+  .ns-route-arrow {
+    justify-content: center;
+    transform: rotate(90deg);
+  }
+
+  /* Sit just above the portal's bottom tab bar */
+  .ns-actions {
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 0.5rem);
+    padding: 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .ns-back {
+    padding: 0 0.8rem;
+  }
+
+  .ns-back span {
+    display: none;
+  }
+
+  .ns-next {
+    padding: 0 1.1rem;
+  }
+
+  .ns-final .btn {
+    padding: 0 0.85rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .ns-final .btn-secondary {
+    display: none;
+  }
+}
+
+/* Pricing: breakdown, "request a quote" and category hints */
+.ns-breakdown {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0 0 0.85rem;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.ns-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ns-breakdown small {
+  color: var(--text-muted);
+}
+
+/* Inside the dark "Total to pay" box: light text so each line is readable */
+.ns-total .ns-breakdown {
+  border-bottom-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  gap: 0.5rem;
+}
+
+.ns-total .ns-breakdown li > span:last-child {
+  color: #fff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ns-total .ns-breakdown small {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ns-contact {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.ns-contact > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.ns-contact strong {
+  display: block;
+  color: #111827;
+  font-size: 0.92rem;
+}
+
+.ns-contact p {
+  margin: 0.15rem 0 0;
+  font-size: 0.84rem;
+  color: #78350f;
+  line-height: 1.45;
+}
+
+.ns-hint {
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.ns-summary-problem a,
+.ns-link-btn {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ns-link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
